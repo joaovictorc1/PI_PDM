@@ -1,35 +1,50 @@
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, Pressable } from 'react-native';
 import { useState, useCallback } from 'react';
-import { useTheme, useFocusEffect } from '@react-navigation/native';
+import { useTheme, useFocusEffect, useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 
 import BotaoFlutuante from '../components/BotaoFlutuante';
 import BarraProgresso from '../components/BarraProgresso';
 
-export default function Dashboard({ navigation }) {
+export default function Dashboard() {
   const { colors } = useTheme();
+  const navigation = useNavigation();
   
+  // Estado para armazenar os dados do utilizador
+  const [perfil, setPerfil] = useState({ nome: '', foto: null });
+
+  // Estados dos cálculos financeiros
   const [gastoMensal, setGastoMensal] = useState(0);
   const [contasAVencer, setContasAVencer] = useState([]);
   const [orcamentoDefinido, setOrcamentoDefinido] = useState(1500.00); 
 
   useFocusEffect(
     useCallback(() => {
-      async function carregarDadosDashboard() {
+      async function carregarDadosGlobais() {
         try {
-          const dadosGuardados = await AsyncStorage.getItem('@transacoes_wisecash');
-          if (dadosGuardados) {
-            const todasTransacoes = JSON.parse(dadosGuardados);
+          // 1. Carrega as informações do Perfil
+          const dadosPerfil = await AsyncStorage.getItem('@perfil_wisecash');
+          if (dadosPerfil) {
+            const perfilSalvo = JSON.parse(dadosPerfil);
+            setPerfil({
+              nome: perfilSalvo.nome || '',
+              foto: perfilSalvo.foto || null
+            });
+          }
+
+          // 2. Carrega as Transações para a Barra de Progresso e Alertas
+          const dadosTransacoes = await AsyncStorage.getItem('@transacoes_wisecash');
+          if (dadosTransacoes) {
+            const todasTransacoes = JSON.parse(dadosTransacoes);
             
             const dataAtual = new Date();
             const mesAtual = dataAtual.getMonth();
             const anoAtual = dataAtual.getFullYear();
 
-            // 1. Cálculo da Barra de Progresso (Gastos do mês atual que já ocorreram ou ocorrem hoje)
+            // Cálculo da Barra de Progresso
             const transacoesDoMes = todasTransacoes.filter(item => {
               const dataItem = new Date(item.data);
-              // Consideramos gasto o que é do mês atual e não está no futuro distante
               return dataItem.getMonth() === mesAtual && 
                      dataItem.getFullYear() === anoAtual &&
                      dataItem <= dataAtual;
@@ -38,9 +53,9 @@ export default function Dashboard({ navigation }) {
             const total = transacoesDoMes.reduce((soma, item) => soma + item.valor, 0);
             setGastoMensal(total);
 
-            // 2. Lógica dos Alertas de Vencimento (Próximos 3 dias)
+            // Lógica dos Alertas de Vencimento (Próximos 3 dias)
             const hoje = new Date();
-            hoje.setHours(0, 0, 0, 0); // Zera as horas para comparar apenas os dias
+            hoje.setHours(0, 0, 0, 0); 
             
             const daquiA3Dias = new Date(hoje);
             daquiA3Dias.setDate(hoje.getDate() + 3);
@@ -51,7 +66,6 @@ export default function Dashboard({ navigation }) {
               return dataItem >= hoje && dataItem <= daquiA3Dias;
             });
 
-            // Ordena as contas pela data de vencimento (as mais urgentes primeiro)
             alertas.sort((a, b) => new Date(a.data) - new Date(b.data));
             setContasAVencer(alertas);
           } else {
@@ -59,18 +73,43 @@ export default function Dashboard({ navigation }) {
             setContasAVencer([]);
           }
         } catch (error) {
-          console.error('Erro ao calcular resumo', error);
+          console.error('Erro ao carregar os dados no dashboard', error);
         }
       }
-      carregarDadosDashboard();
+      carregarDadosGlobais();
     }, [])
   );
+
+  const primeiroNome = perfil.nome ? perfil.nome.split(' ')[0] : 'Visitante';
 
   return (
     <View style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false} style={{ width: '100%' }}>
-        <Text style={[styles.saudacao, { color: colors.text }]}>
-          Resumo de {new Date().toLocaleString('pt-PT', { month: 'long' })}
+        
+        {/* --- CABEÇALHO DO PERFIL --- */}
+        <Pressable 
+          style={styles.headerPerfil} 
+          onPress={() => navigation.navigate('Perfil')} 
+        >
+          <View style={styles.infoTexto}>
+            <Text style={styles.saudacao}>Olá,</Text>
+            <Text style={[styles.nome, { color: colors.text }]}>{primeiroNome}!</Text>
+          </View>
+
+          <View style={styles.fotoContainer}>
+            {perfil.foto ? (
+              <Image source={{ uri: perfil.foto }} style={[styles.foto, { borderColor: colors.primary }]} />
+            ) : (
+              <View style={[styles.fotoPlaceholder, { backgroundColor: colors.border }]}>
+                <Ionicons name="person" size={24} color="gray" />
+              </View>
+            )}
+          </View>
+        </Pressable>
+
+        {/* --- RESUMO E BARRA DE PROGRESSO --- */}
+        <Text style={[styles.tituloResumo, { color: colors.text }]}>
+          Resumo de {new Date().toLocaleString('pt-BR', { month: 'long' })}
         </Text>
 
         <BarraProgresso 
@@ -78,7 +117,7 @@ export default function Dashboard({ navigation }) {
           limiteOrcamento={orcamentoDefinido} 
         />
 
-        {/* Secção Dinâmica de Alertas */}
+        {/* --- ALERTAS E CONTAS A VENCER --- */}
         <View style={styles.seccaoAlertas}>
           <Text style={[styles.tituloSeccao, { color: colors.text }]}>
             Atenção: Próximos 3 Dias
@@ -93,8 +132,7 @@ export default function Dashboard({ navigation }) {
             </View>
           ) : (
             contasAVencer.map((conta) => {
-              // Formata a data para exibir no cartão
-              const dataFormatada = new Date(conta.data).toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' });
+              const dataFormatada = new Date(conta.data).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
               
               return (
                 <View key={conta.id} style={[styles.cartaoAlerta, { backgroundColor: '#3A1C1C', borderColor: '#FF4C4C' }]}>
@@ -115,7 +153,7 @@ export default function Dashboard({ navigation }) {
         </View>
         
         {/* Espaçamento extra no fundo para o botão flutuante não tapar o conteúdo */}
-        <View style={{ height: 80 }} />
+        <View style={{ height: 100 }} />
       </ScrollView>
 
       {/* O Botão Flutuante mantém-se fixo na ecrã, fora do ScrollView */}
@@ -131,16 +169,36 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     alignItems: 'center'
   },
-  saudacao: {
+  
+  // Estilos do Cabeçalho de Perfil
+  headerPerfil: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    marginBottom: 24,
+    marginTop: 8,
+    width: '100%'
+  },
+  infoTexto: { flex: 1 },
+  saudacao: { fontSize: 16, color: 'gray' },
+  nome: { fontSize: 28, fontWeight: 'bold' },
+  fotoContainer: { position: 'relative' },
+  foto: { width: 56, height: 56, borderRadius: 28, borderWidth: 2 },
+  fotoPlaceholder: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', borderWidth: 2 },
+
+  // Estilos da Secção de Resumo
+  tituloResumo: {
     fontSize: 22,
     fontWeight: 'bold',
     alignSelf: 'flex-start',
-    marginBottom: 20,
+    marginBottom: 16,
     textTransform: 'capitalize'
   },
+
+  // Estilos dos Alertas
   seccaoAlertas: {
     width: '100%',
-    marginTop: 10,
+    marginTop: 24,
   },
   tituloSeccao: {
     fontSize: 18,

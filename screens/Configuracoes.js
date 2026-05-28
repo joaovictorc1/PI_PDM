@@ -1,126 +1,197 @@
-import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
-import { useTheme } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, Switch, TextInput, Pressable, Alert, ScrollView } from 'react-native';
+import { useState, useCallback } from 'react';
+import { useTheme, useFocusEffect, useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
+import { Ionicons } from '@expo/vector-icons';
+import * as LocalAuthentication from 'expo-local-authentication';
 
 export default function Configuracoes() {
   const { colors } = useTheme();
+  const navigation = useNavigation();
+  
+  const [temSenha, setTemSenha] = useState(false);
+  const [senhaAtualInput, setSenhaAtualInput] = useState('');
+  const [novaSenha, setNovaSenha] = useState('');
+  const [exibirCampoSenha, setExibirCampoSenha] = useState(false);
+  const [modoAlteracao, setModoAlteracao] = useState(false);
+  const [senhaVisivel, setSenhaVisivel] = useState(false);
+  const [senhaAtualVisivel, setSenhaAtualVisivel] = useState(false);
+  const [usarBiometria, setUsarBiometria] = useState(false);
 
-  async function exportarBackup() {
-    try {
-      // 1. Ler todos os dados guardados
-      const transacoes = await AsyncStorage.getItem('@transacoes_wisecash');
-      const metas = await AsyncStorage.getItem('@metas_wisecash');
+  useFocusEffect(
+    useCallback(() => {
+      async function verificarConfiguracoes() {
+        const senhaSalva = await AsyncStorage.getItem('@senha_wisecash');
+        if (senhaSalva) setTemSenha(true);
 
-      // 2. Montar um pacote único com toda a informação
-      const backupData = {
-        dataExportacao: new Date().toISOString(),
-        transacoes: transacoes ? JSON.parse(transacoes) : [],
-        metas: metas ? JSON.parse(metas) : []
-      };
+        const biometriaSalva = await AsyncStorage.getItem('@biometria_wisecash');
+        if (biometriaSalva === 'true') setUsarBiometria(true);
+      }
+      verificarConfiguracoes();
+    }, [])
+  );
 
-      // 3. Transformar o pacote em texto JSON
-      const conteudoString = JSON.stringify(backupData, null, 2);
+  async function gerenciarBiometria(ativar) {
+    if (ativar) {
+      // Verifica se o telemóvel suporta e se o utilizador tem PIN/Biometria configurados
+      const temHardware = await LocalAuthentication.hasHardwareAsync();
+      const temBiometriaCadastrada = await LocalAuthentication.isEnrolledAsync();
 
-      // 4. Criar um ficheiro temporário no sistema do telemóvel
-      const caminhoFicheiro = FileSystem.documentDirectory + 'wisecash_backup.json';
-      
-      // Removemos o parâmetro de "encoding", pois o padrão já é UTF-8
-      await FileSystem.writeAsStringAsync(caminhoFicheiro, conteudoString);
-
-      // 5. Verificar se a partilha está disponível no dispositivo e partilhar
-      const podePartilhar = await Sharing.isAvailableAsync();
-      if (podePartilhar) {
-        await Sharing.shareAsync(caminhoFicheiro, {
-          mimeType: 'application/json',
-          dialogTitle: 'Exportar Backup do Wisecash',
-        });
-      } else {
-        Alert.alert('Erro', 'A partilha de ficheiros não é suportada neste dispositivo.');
+      if (!temHardware || !temBiometriaCadastrada) {
+        Alert.alert('Não Disponível', 'O seu dispositivo não possui biometria ou senha de ecrã configurada.');
+        return;
       }
 
-    } catch (error) {
-      console.error('Erro no backup:', error);
-      Alert.alert('Erro', 'Não foi possível gerar o ficheiro de backup.');
+      // Faz um teste real para ter a certeza que o utilizador é o dono do aparelho antes de ativar
+      const resultado = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Confirme a sua identidade para ativar'
+      });
+
+      if (resultado.success) {
+        await AsyncStorage.setItem('@biometria_wisecash', 'true');
+        setUsarBiometria(true);
+      }
+    } else {
+      await AsyncStorage.setItem('@biometria_wisecash', 'false');
+      setUsarBiometria(false);
     }
   }
 
-  // Função para limpar tudo (Reset da Aplicação) - Cuidado!
-  function confirmarLimpeza() {
-    Alert.alert(
-      'Apagar Todos os Dados',
-      'Tem a certeza absoluta? Esta ação não pode ser desfeita.',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { 
-          text: 'Sim, Apagar Tudo', 
-          style: 'destructive',
-          onPress: async () => {
-            await AsyncStorage.clear();
-            Alert.alert('Sucesso', 'A aplicação foi restaurada para o estado inicial. Reinicie o Wisecash.');
+  async function gerenciarSenha(ativar) {
+    if (!ativar) {
+      Alert.alert(
+        "Remover Proteção", "Tem certeza que deseja remover a senha do aplicativo?",
+        [
+          { text: "Cancelar", style: "cancel" },
+          { text: "Remover", style: "destructive", onPress: async () => {
+              await AsyncStorage.removeItem('@senha_wisecash');
+              // Se remover a senha do app, desativa a biometria por segurança
+              await AsyncStorage.setItem('@biometria_wisecash', 'false');
+              setTemSenha(false);
+              setUsarBiometria(false);
+              setExibirCampoSenha(false);
+              setModoAlteracao(false);
+              limparFormularios();
+            }
           }
-        }
-      ]
-    );
+        ]
+      );
+    } else {
+      setExibirCampoSenha(true);
+      setModoAlteracao(false);
+    }
+  }
+
+  function iniciarAlteracao() { setModoAlteracao(true); setExibirCampoSenha(true); limparFormularios(); }
+  function cancelarEdicao() { setExibirCampoSenha(false); setModoAlteracao(false); limparFormularios(); }
+  function limparFormularios() { setNovaSenha(''); setSenhaAtualInput(''); setSenhaVisivel(false); setSenhaAtualVisivel(false); }
+
+  async function salvarNovaSenha() {
+    if (novaSenha.trim().length < 4) { Alert.alert('Aviso', 'A nova senha deve ter no mínimo 4 caracteres.'); return; }
+    try {
+      if (modoAlteracao) {
+        const senhaGuardada = await AsyncStorage.getItem('@senha_wisecash');
+        if (senhaAtualInput !== senhaGuardada) { Alert.alert('Acesso Negado', 'A senha atual está incorreta.'); return; }
+      }
+      await AsyncStorage.setItem('@senha_wisecash', novaSenha);
+      setTemSenha(true); setExibirCampoSenha(false); setModoAlteracao(false); limparFormularios();
+      Alert.alert('Sucesso', modoAlteracao ? 'A sua palavra-passe foi atualizada!' : 'Palavra-passe configurada com sucesso!');
+    } catch (error) { Alert.alert('Erro', 'Não foi possível salvar a senha.'); }
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={[styles.titulo, { color: colors.text }]}>Gestão de Dados</Text>
-      
-      <Text style={{ color: 'gray', marginBottom: 20 }}>
-        Mantenha os seus dados financeiros seguros exportando um ficheiro de backup.
-      </Text>
-
-      {/* Botão de Exportar Backup */}
+    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
+      <Text style={[styles.tituloSecao, { color: colors.text, marginTop: 0 }]}>Minha Conta</Text>
       <Pressable 
-        style={({ pressed }) => [styles.botaoAcao, { backgroundColor: colors.card, borderColor: colors.border }, pressed && { opacity: 0.7 }]}
-        onPress={exportarBackup}
+        style={[styles.cartao, { backgroundColor: colors.card, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', marginBottom: 24 }]}
+        onPress={() => navigation.navigate('Perfil')}
       >
-        <View style={styles.iconeContainer}>
-          <Ionicons name="cloud-download-outline" size={24} color={colors.primary} />
+        <Ionicons name="person-circle" size={40} color={colors.primary} style={{ marginRight: 12 }} />
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: colors.text, fontSize: 16, fontWeight: 'bold' }}>Editar Perfil</Text>
+          <Text style={{ color: 'gray', fontSize: 14 }}>Foto, nome e ocupação</Text>
         </View>
-        <View style={styles.textosBotao}>
-          <Text style={[styles.tituloBotao, { color: colors.text }]}>Exportar Backup</Text>
-          <Text style={styles.subtituloBotao}>Guardar ficheiro JSON</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={20} color="gray" />
+        <Ionicons name="chevron-forward" size={24} color="gray" />
       </Pressable>
+      {/* --------------------------------------- */}
 
-      {/* Botão de Apagar Tudo (Zona de Perigo) */}
-      <Text style={[styles.titulo, { color: colors.text, marginTop: 40, fontSize: 18 }]}>Zona de Perigo</Text>
+      <Text style={[styles.tituloSecao, { color: colors.text }]}>Segurança e Acesso</Text>
+      <Text style={[styles.tituloSecao, { color: colors.text }]}>Segurança e Acesso</Text>
       
-      <Pressable 
-        style={({ pressed }) => [styles.botaoAcao, { backgroundColor: '#3A1C1C', borderColor: '#FF4C4C' }, pressed && { opacity: 0.7 }]}
-        onPress={confirmarLimpeza}
-      >
-        <View style={styles.iconeContainer}>
-          <Ionicons name="warning-outline" size={24} color="#FF4C4C" />
+      <View style={[styles.cartao, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        
+        <View style={styles.linhaConfig}>
+          <View style={styles.infoTextoConfig}>
+            <Text style={[styles.textoPrincipal, { color: colors.text }]}>Senha do Aplicativo</Text>
+            <Text style={styles.textoSecundario}>Exigir senha ao abrir o Wisecash</Text>
+          </View>
+          <Switch value={temSenha || (exibirCampoSenha && !modoAlteracao)} onValueChange={gerenciarSenha} trackColor={{ true: colors.primary }} />
         </View>
-        <View style={styles.textosBotao}>
-          <Text style={[styles.tituloBotao, { color: '#FFFFFF' }]}>Apagar Todos os Dados</Text>
-          <Text style={[styles.subtituloBotao, { color: '#FF9999' }]}>Ação irreversível</Text>
-        </View>
-      </Pressable>
-    </View>
+
+        {temSenha && !exibirCampoSenha && (
+          <Pressable style={[styles.botaoAlterar, { borderTopColor: colors.border }]} onPress={iniciarAlteracao}>
+            <Ionicons name="key-outline" size={20} color={colors.primary} />
+            <Text style={[styles.textoBotaoAlterar, { color: colors.primary }]}>Alterar palavra-passe</Text>
+          </Pressable>
+        )}
+
+        {/* Módulo de Biometria (Só aparece se a senha do App estiver ativada, pois atua como atalho) */}
+        {temSenha && !exibirCampoSenha && (
+          <View style={[styles.linhaConfig, { borderTopWidth: 1, borderTopColor: colors.border, marginTop: 16, paddingTop: 16 }]}>
+            <View style={styles.infoTextoConfig}>
+              <Text style={[styles.textoPrincipal, { color: colors.text }]}>Biometria / Senha do Sistema</Text>
+              <Text style={styles.textoSecundario}>Usar FaceID, TouchID ou PIN do celular para desbloquear</Text>
+            </View>
+            <Switch value={usarBiometria} onValueChange={gerenciarBiometria} trackColor={{ true: colors.primary }} />
+          </View>
+        )}
+
+        {/* ... (Todo o formulário de criar/alterar senha continua igual) ... */}
+        {exibirCampoSenha && (
+          <View style={[styles.areaSenha, { borderTopColor: colors.border }]}>
+            {modoAlteracao && (
+              <>
+                <Text style={[styles.labelSenha, { color: colors.text }]}>Senha atual:</Text>
+                <View style={styles.inputContainer}>
+                  <TextInput style={[styles.input, { color: colors.text, borderColor: colors.border }]} placeholder="Confirme a senha antiga..." placeholderTextColor="gray" secureTextEntry={!senhaAtualVisivel} value={senhaAtualInput} onChangeText={setSenhaAtualInput} />
+                  <Pressable style={styles.iconeOlho} onPress={() => setSenhaAtualVisivel(!senhaAtualVisivel)}><Ionicons name={senhaAtualVisivel ? "eye-off" : "eye"} size={24} color="gray" /></Pressable>
+                </View>
+              </>
+            )}
+
+            <Text style={[styles.labelSenha, { color: colors.text, marginTop: modoAlteracao ? 8 : 0 }]}>{modoAlteracao ? 'Nova senha:' : 'Crie uma senha de acesso:'}</Text>
+            <View style={styles.inputContainer}>
+              <TextInput style={[styles.input, { color: colors.text, borderColor: colors.border }]} placeholder="Digite a nova senha..." placeholderTextColor="gray" secureTextEntry={!senhaVisivel} value={novaSenha} onChangeText={setNovaSenha} autoFocus={!modoAlteracao} />
+              <Pressable style={styles.iconeOlho} onPress={() => setSenhaVisivel(!senhaVisivel)}><Ionicons name={senhaVisivel ? "eye-off" : "eye"} size={24} color="gray" /></Pressable>
+            </View>
+
+            <View style={styles.botoesAcaoRow}>
+              {modoAlteracao && (<Pressable style={[styles.botaoAcao, { backgroundColor: '#333333', marginRight: 10 }]} onPress={cancelarEdicao}><Text style={styles.textoBotaoBranco}>Cancelar</Text></Pressable>)}
+              <Pressable style={[styles.botaoAcao, { backgroundColor: colors.primary, flex: 1 }]} onPress={salvarNovaSenha}><Text style={styles.textoBotaoBranco}>Guardar</Text></Pressable>
+            </View>
+          </View>
+        )}
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
-  titulo: { fontSize: 22, fontWeight: 'bold', marginBottom: 10 },
-  botaoAcao: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 12,
-  },
-  iconeContainer: { marginRight: 16 },
-  textosBotao: { flex: 1 },
-  tituloBotao: { fontSize: 16, fontWeight: 'bold' },
-  subtituloBotao: { fontSize: 14, color: 'gray', marginTop: 2 }
+  tituloSecao: { fontSize: 20, fontWeight: 'bold', marginBottom: 16, marginTop: 8 },
+  cartao: { borderRadius: 12, borderWidth: 1, padding: 16 },
+  linhaConfig: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  infoTextoConfig: { flex: 1, paddingRight: 16 },
+  textoPrincipal: { fontSize: 16, fontWeight: 'bold' },
+  textoSecundario: { fontSize: 14, color: 'gray', marginTop: 4 },
+  botaoAlterar: { flexDirection: 'row', alignItems: 'center', marginTop: 16, paddingTop: 16, borderTopWidth: 1 },
+  textoBotaoAlterar: { fontSize: 16, fontWeight: 'bold', marginLeft: 8 },
+  areaSenha: { marginTop: 16, borderTopWidth: 1, paddingTop: 16 },
+  labelSenha: { fontSize: 14, marginBottom: 8, fontWeight: 'bold' },
+  inputContainer: { position: 'relative', justifyContent: 'center', marginBottom: 16 },
+  input: { borderWidth: 1, borderRadius: 8, padding: 12, paddingRight: 48, fontSize: 16 },
+  iconeOlho: { position: 'absolute', right: 12, height: '100%', justifyContent: 'center', zIndex: 1 },
+  botoesAcaoRow: { flexDirection: 'row', width: '100%' },
+  botaoAcao: { padding: 12, borderRadius: 8, alignItems: 'center', flex: 1 },
+  textoBotaoBranco: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 }
 });

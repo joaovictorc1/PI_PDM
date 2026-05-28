@@ -1,15 +1,17 @@
 import { View, Text, StyleSheet, FlatList, Pressable } from 'react-native';
 import { useState, useCallback } from 'react';
-import { useTheme, useFocusEffect } from '@react-navigation/native';
+import { useTheme, useFocusEffect, useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import DespesaItem from '../components/despesa/DespesaItem';
 import DespesaSumario from '../components/despesa/DespesaSumario';
+import BotaoFlutuante from '../components/BotaoFlutuante'; // <-- Importação adicionada
 
 export default function Transacoes() {
   const { colors } = useTheme();
+  const navigation = useNavigation(); // <-- Declaração da navegação para o botão
   const [listaTransacoes, setListaTransacoes] = useState([]);
-  const [filtro, setFiltro] = useState('todas'); // Estados: 'todas' ou 'recentes'
+  const [filtro, setFiltro] = useState('todas'); 
 
   const carregarDados = useCallback(async () => {
     try {
@@ -17,7 +19,6 @@ export default function Transacoes() {
       if (dadosGuardados) {
         const todasTransacoes = JSON.parse(dadosGuardados);
 
-        // 1. APLICAR FILTRO DE TEMPO (Se selecionado as recentes)
         let transacoesFiltradas = todasTransacoes;
         if (filtro === 'recentes') {
           const hoje = new Date();
@@ -30,7 +31,6 @@ export default function Transacoes() {
           });
         }
 
-        // 2. AGRUPAMENTO VISUAL (Evita repetição de parcelas na listagem)
         const transacoesAgrupadas = [];
         const mapasGrupos = {};
 
@@ -41,7 +41,6 @@ export default function Transacoes() {
                 isGrupo: true,
                 id: item.grupoId,
                 descricaoBase: item.descricaoBase,
-                // Mantém a propriedade 'valor' legível para o componente de Sumário não retornar NaN
                 valor: item.valorTotalDaCompra, 
                 valorTotalDaCompra: item.valorTotalDaCompra,
                 data: item.data, 
@@ -57,7 +56,6 @@ export default function Transacoes() {
           }
         });
 
-        // Ordenar parcelas internas e ajustar a data base do grupo
         transacoesAgrupadas.forEach(item => {
           if (item.isGrupo) {
             item.parcelas.sort((a, b) => new Date(a.data) - new Date(b.data));
@@ -65,9 +63,7 @@ export default function Transacoes() {
           }
         });
 
-        // Ordenar histórico geral por data (mais recente primeiro)
         transacoesAgrupadas.sort((a, b) => new Date(b.data) - new Date(a.data));
-        
         setListaTransacoes(transacoesAgrupadas);
       } else {
         setListaTransacoes([]);
@@ -85,28 +81,15 @@ export default function Transacoes() {
 
   return (
     <View style={styles.container}>
-      {/* Seletor de Filtro Superior Avançado */}
       <View style={[styles.filtroContainer, { borderColor: colors.border }]}>
-        <Pressable 
-          style={[styles.botaoFiltro, filtro === 'todas' && { backgroundColor: colors.primary }]} 
-          onPress={() => setFiltro('todas')}
-        >
-          <Text style={[styles.textoFiltro, { color: filtro === 'todas' ? '#FFFFFF' : colors.text }]}>
-            Todas
-          </Text>
+        <Pressable style={[styles.botaoFiltro, filtro === 'todas' && { backgroundColor: colors.primary }]} onPress={() => setFiltro('todas')}>
+          <Text style={[styles.textoFiltro, { color: filtro === 'todas' ? '#FFFFFF' : colors.text }]}>Todas</Text>
         </Pressable>
-        
-        <Pressable 
-          style={[styles.botaoFiltro, filtro === 'recentes' && { backgroundColor: colors.primary }]} 
-          onPress={() => setFiltro('recentes')}
-        >
-          <Text style={[styles.textoFiltro, { color: filtro === 'recentes' ? '#FFFFFF' : colors.text }]}>
-            Recentes
-          </Text>
+        <Pressable style={[styles.botaoFiltro, filtro === 'recentes' && { backgroundColor: colors.primary }]} onPress={() => setFiltro('recentes')}>
+          <Text style={[styles.textoFiltro, { color: filtro === 'recentes' ? '#FFFFFF' : colors.text }]}>Últimos 7 dias</Text>
         </Pressable>
       </View>
 
-      {/* O Sumário calcula automaticamente com base no array injetado */}
       <DespesaSumario despesas={listaTransacoes} />
 
       <FlatList
@@ -114,38 +97,21 @@ export default function Transacoes() {
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <DespesaItem {...item} />}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 40 }}
-        ListEmptyComponent={
-          <Text style={styles.textoVazio}>Nenhuma transação encontrada.</Text>
-        }
+        // Aumento do espaçamento no fundo da lista para acomodar o botão flutuante
+        contentContainerStyle={{ paddingBottom: 100 }} 
+        ListEmptyComponent={<Text style={styles.textoVazio}>Nenhuma transação encontrada.</Text>}
       />
+
+      {/* Botão Flutuante adicionado ao ecrã de Transações */}
+      <BotaoFlutuante onPress={() => navigation.navigate('GerenciarTransacao')} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
-  filtroContainer: { 
-    flexDirection: 'row', 
-    marginBottom: 16, 
-    borderRadius: 8, 
-    overflow: 'hidden', 
-    borderWidth: 1 
-  },
-  botaoFiltro: { 
-    flex: 1, 
-    paddingVertical: 12, 
-    alignItems: 'center', 
-    backgroundColor: '#1E1E1E' 
-  },
-  textoFiltro: { 
-    fontSize: 14, 
-    fontWeight: 'bold' 
-  },
-  textoVazio: { 
-    color: 'gray', 
-    textAlign: 'center', 
-    marginTop: 40, 
-    fontSize: 16 
-  }
+  filtroContainer: { flexDirection: 'row', marginBottom: 16, borderRadius: 8, overflow: 'hidden', borderWidth: 1 },
+  botaoFiltro: { flex: 1, paddingVertical: 12, alignItems: 'center', backgroundColor: '#1E1E1E' },
+  textoFiltro: { fontSize: 14, fontWeight: 'bold' },
+  textoVazio: { color: 'gray', textAlign: 'center', marginTop: 40, fontSize: 16 }
 });

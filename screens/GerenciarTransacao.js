@@ -25,7 +25,6 @@ export default function GerenciarTransacao({ navigation, route }) {
   const [isParcelado, setIsParcelado] = useState(isGrupoEdit ? true : false);
   const [numeroParcelas, setNumeroParcelas] = useState(isGrupoEdit ? transacaoRecebida.parcelas.length.toString() : '1');
   
-  // Novo Estado: Anexo de Imagem (Recibo/Fatura)
   const [anexo, setAnexo] = useState(isEditando && transacaoRecebida.anexo ? transacaoRecebida.anexo : null);
 
   useLayoutEffect(() => {
@@ -45,7 +44,6 @@ export default function GerenciarTransacao({ navigation, route }) {
     if (dataEscolhida) setDataSelecionada(dataEscolhida);
   }
 
-  // Funções da Câmara e Galeria
   async function tirarFoto() {
     const permissao = await ImagePicker.requestCameraPermissionsAsync();
     if (permissao.granted === false) {
@@ -55,7 +53,7 @@ export default function GerenciarTransacao({ navigation, route }) {
     
     let resultado = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.5, // Reduz a qualidade para não ocupar muito espaço no telemóvel
+      quality: 0.5,
     });
 
     if (!resultado.canceled) {
@@ -102,7 +100,7 @@ export default function GerenciarTransacao({ navigation, route }) {
           data: dataDaParcela.toISOString(),
           categoria: categoria,
           tags: tags.trim(),
-          anexo: anexo // Guarda a imagem no pacote
+          anexo: anexo
         });
       }
     } else {
@@ -113,7 +111,7 @@ export default function GerenciarTransacao({ navigation, route }) {
         data: dataSelecionada.toISOString(),
         categoria: categoria,
         tags: tags.trim(),
-        anexo: anexo // Guarda a imagem na transação única
+        anexo: anexo
       });
     }
 
@@ -158,7 +156,12 @@ export default function GerenciarTransacao({ navigation, route }) {
   }
 
   return (
-    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
+    <ScrollView 
+      style={{ flex: 1 }} 
+      // Esta é a linha mágica! Adiciona o espaçamento largo na parte de baixo do rolar da página
+      contentContainerStyle={styles.scrollContent} 
+      keyboardShouldPersistTaps="handled"
+    >
       <View style={styles.inputContainer}>
         <Text style={[styles.label, { color: colors.text }]}>Descrição</Text>
         <TextInput style={[styles.input, { color: colors.text, borderColor: colors.border }]} value={descricao} onChangeText={setDescricao} maxLength={30} />
@@ -208,7 +211,6 @@ export default function GerenciarTransacao({ navigation, route }) {
         </ScrollView>
       </View>
 
-      {/* Nova Secção: Anexos (Câmara e Galeria) */}
       <View style={styles.inputContainer}>
         <Text style={[styles.label, { color: colors.text }]}>Recibo / Comprovativo</Text>
         
@@ -233,6 +235,7 @@ export default function GerenciarTransacao({ navigation, route }) {
         )}
       </View>
 
+      {/* O botão Guardar agora está numa área com espaçamento protegido */}
       <View style={styles.botoesContainer}>
         <Button title={isEditando ? "Atualizar" : "Guardar"} color={colors.primary} onPress={guardarTransacao} />
       </View>
@@ -247,19 +250,18 @@ export default function GerenciarTransacao({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24 },
+  // Mudámos o padding do contêiner principal para o scrollContent para evitar o corte do ecrã
+  scrollContent: { padding: 24, paddingBottom: 120 }, 
   inputContainer: { marginBottom: 20 },
   label: { fontSize: 16, marginBottom: 8, fontWeight: 'bold' },
   input: { borderWidth: 1, borderRadius: 8, padding: 12, fontSize: 16 },
   dataBotao: { justifyContent: 'center' },
-  botoesContainer: { marginTop: 10, paddingBottom: 40 },
-  lixeiraContainer: { marginTop: 20, alignItems: 'center', paddingTop: 16, borderTopWidth: 1, borderColor: '#2A2A2A', paddingBottom: 40 },
+  botoesContainer: { marginTop: 10 },
+  lixeiraContainer: { marginTop: 20, alignItems: 'center', paddingTop: 16, borderTopWidth: 1, borderColor: '#2A2A2A' },
   categoriasScroll: { flexDirection: 'row', marginTop: 4 },
   chip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, marginRight: 10, justifyContent: 'center', alignItems: 'center' },
   parcelaContainer: { padding: 16, borderRadius: 8, borderWidth: 1, marginBottom: 20 },
   parcelaHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  
-  // Estilos da nova área de Anexos
   botoesAnexoRow: { flexDirection: 'row', gap: 12 },
   botaoAnexo: { flex: 1, borderWidth: 1, borderStyle: 'dashed', borderRadius: 8, padding: 16, alignItems: 'center', justifyContent: 'center' },
   anexoContainer: { position: 'relative', marginTop: 8 },
