@@ -114,8 +114,7 @@ export default function Configuracoes() {
         <Ionicons name="chevron-forward" size={24} color="gray" />
       </Pressable>
       {/* --------------------------------------- */}
-
-      <Text style={[styles.tituloSecao, { color: colors.text }]}>Segurança e Acesso</Text>
+      
       <Text style={[styles.tituloSecao, { color: colors.text }]}>Segurança e Acesso</Text>
       
       <View style={[styles.cartao, { backgroundColor: colors.card, borderColor: colors.border }]}>

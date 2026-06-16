@@ -5,7 +5,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import DespesaItem from '../components/despesa/DespesaItem';
 import DespesaSumario from '../components/despesa/DespesaSumario';
-import BotaoFlutuante from '../components/BotaoFlutuante'; // <-- Importação adicionada
 
 export default function Transacoes() {
   const { colors } = useTheme();
@@ -101,9 +100,6 @@ export default function Transacoes() {
         contentContainerStyle={{ paddingBottom: 100 }} 
         ListEmptyComponent={<Text style={styles.textoVazio}>Nenhuma transação encontrada.</Text>}
       />
-
-      {/* Botão Flutuante adicionado ao ecrã de Transações */}
-      <BotaoFlutuante onPress={() => navigation.navigate('GerenciarTransacao')} />
     </View>
   );
 }

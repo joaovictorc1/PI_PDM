@@ -1,4 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
+import { View } from 'react-native';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -6,16 +7,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Importação das telas
+// Importação das telas e componentes
 import Dashboard from './screens/Dashboard';
 import Transacoes from './screens/Transacoes';
 import GerenciarTransacao from './screens/GerenciarTransacao';
 import Relatorios from './screens/Relatorios';
 import Metas from './screens/Metas';
+import GerenciarMeta from './screens/GerenciarMeta';
 import Configuracoes from './screens/Configuracoes';
-import Orcamentos from './screens/Orcamentos';
-import Bloqueio from './screens/Bloqueio'; 
+import Orcamentos from './screens/Orcamentos'; 
 import Perfil from './screens/Perfil';
+import Bloqueio from './screens/Bloqueio';
+import BotaoFlutuante from './components/BotaoFlutuante';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -35,46 +38,53 @@ const TemaEscuroVerde = {
 function NavegacaoPrincipal() {
   return (
     <Tab.Navigator
-      screenOptions={({ route }) => ({
+      // Repare que adicionei o "navigation" aqui nos parâmetros globais
+      screenOptions={({ route, navigation }) => ({
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
-          
-          if (route.name === 'Dashboard') {
-            iconName = focused ? 'pie-chart' : 'pie-chart-outline';
-          } else if (route.name === 'Transações') {
-            iconName = focused ? 'list' : 'list-outline';
-          } else if (route.name === 'Orçamentos') {
-            iconName = focused ? 'wallet' : 'wallet-outline';
-          } else if (route.name === 'Relatórios') {
-            iconName = focused ? 'bar-chart' : 'bar-chart-outline'; 
-          } else if (route.name === 'Metas') {
-            iconName = focused ? 'trophy' : 'trophy-outline';
-          }
+          if (route.name === 'Dashboard') iconName = focused ? 'pie-chart' : 'pie-chart-outline';
+          else if (route.name === 'Transações') iconName = focused ? 'list' : 'list-outline';
+          else if (route.name === 'Relatórios') iconName = focused ? 'bar-chart' : 'bar-chart-outline'; 
+          else if (route.name === 'Metas') iconName = focused ? 'trophy' : 'trophy-outline';
           
           return <Ionicons name={iconName} size={size} color={color} />;
         },
         headerTitleAlign: 'center',
-        tabBarStyle: { borderTopWidth: 0, elevation: 0, shadowOpacity: 0 }
+        
+        // --- A MÁGICA ESTÁ AQUI: O botão agora é global para todas as abas ---
+        headerRight: () => (
+          <Ionicons 
+            name="settings-outline" 
+            size={24} 
+            color="#2E8B57" 
+            style={{ marginRight: 16 }} 
+            onPress={() => navigation.navigate('Configuracoes')} 
+          />
+        ),
+        // ---------------------------------------------------------------------
+
+        tabBarStyle: { 
+          borderTopWidth: 0, 
+          elevation: 0, 
+          shadowOpacity: 0,
+          backgroundColor: '#1E1E1E', 
+          height: 70 
+        },
+        tabBarShowLabel: false 
       })}
     >
-      <Tab.Screen 
-        name="Dashboard" 
-        component={Dashboard} 
-        options={({ navigation }) => ({ 
-          title: 'Visão Geral',
-          headerRight: () => (
-            <Ionicons 
-              name="settings-outline" 
-              size={24} 
-              color="#2E8B57" 
-              style={{ marginRight: 16 }}
-              onPress={() => navigation.navigate('Configuracoes')} 
-            />
-          )
-        })} 
-      />
+      {/* O Dashboard agora ficou muito mais limpo, só com o título */}
+      <Tab.Screen name="Dashboard" component={Dashboard} options={{ title: 'Visão Geral' }} />
       <Tab.Screen name="Transações" component={Transacoes} options={{ title: 'Transações' }} />
-      <Tab.Screen name="Orçamentos" component={Orcamentos} options={{ title: 'Orçamentos' }} />
+
+      <Tab.Screen 
+        name="Adicionar" 
+        component={View} 
+        options={{
+          tabBarButton: () => <BotaoFlutuante /> 
+        }} 
+      />
+
       <Tab.Screen name="Relatórios" component={Relatorios} options={{ title: 'Relatórios' }} />
       <Tab.Screen name="Metas" component={Metas} options={{ title: 'Metas' }} />
     </Tab.Navigator>
@@ -82,29 +92,21 @@ function NavegacaoPrincipal() {
 }
 
 export default function App() {
-  const [statusAcesso, setStatusAcesso] = useState('carregando'); // 'carregando', 'bloqueado', 'livre'
+  const [statusAcesso, setStatusAcesso] = useState('carregando');
 
   useEffect(() => {
     async function checarProtecao() {
       try {
         const senha = await AsyncStorage.getItem('@senha_wisecash');
-        if (senha) {
-          setStatusAcesso('bloqueado');
-        } else {
-          setStatusAcesso('livre');
-        }
-      } catch (e) {
-        setStatusAcesso('livre'); 
-      }
+        if (senha) setStatusAcesso('bloqueado');
+        else setStatusAcesso('livre');
+      } catch (e) { setStatusAcesso('livre'); }
     }
     checarProtecao();
   }, []);
 
-  if (statusAcesso === 'carregando') {
-    return null; 
-  }
+  if (statusAcesso === 'carregando') return null; 
 
-  // A BARREIRA: Se tiver senha, mostra apenas a tela de Bloqueio
   if (statusAcesso === 'bloqueado') {
     return (
       <>
@@ -114,7 +116,6 @@ export default function App() {
     );
   }
 
-  // O CAMINHO LIVRE: Renderiza o App normal
   return (
     <>
       <StatusBar style="light" />
@@ -124,6 +125,8 @@ export default function App() {
           <Stack.Screen name="GerenciarTransacao" component={GerenciarTransacao} options={{ title: 'Nova Transação', presentation: 'modal' }} />
           <Stack.Screen name="Configuracoes" component={Configuracoes} options={{ title: 'Configurações' }} />
           <Stack.Screen name="Perfil" component={Perfil} options={{ title: 'Meu Perfil' }} />
+          <Stack.Screen name="Orcamentos" component={Orcamentos} options={{ title: 'Definir Limites' }} />
+          <Stack.Screen name="GerenciarMeta" component={GerenciarMeta} options={{ title: 'Planejar Nova Meta' }} />
         </Stack.Navigator>
       </NavigationContainer>
     </>
