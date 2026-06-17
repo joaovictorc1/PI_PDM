@@ -32,11 +32,36 @@ export default function Perfil() {
     carregarPerfil();
   }, []);
 
+  // --- FUNÇÃO GATILHO DO EASTER EGG ATUALIZADA ---
+  function aoMudarNome(texto) {
+    setNome(texto);
+
+    if (texto === '119201512615') {
+      setNome('Astolfo');
+      setEmail('Leozinho@Astolfo.com');
+      setOcupacao('Espadachim');
+      
+      try {
+        // Como o ficheiro Perfil.js está dentro da pasta 'screens', 
+        // usamos '../assets/avatar.png' para subir um nível e encontrar a pasta assets.
+        const caminhoImagemLocal = Image.resolveAssetSource(require('../assets/Astolfo (Espada).png')).uri;
+        setFoto(caminhoImagemLocal);
+      } catch (error) {
+        console.warn('Aviso: Certifique-se de que o ficheiro assets/avatar.png existe no projeto.');
+      }
+      
+      Alert.alert(
+        '🔓 Perfil Secreto Carregado',
+        'Os dados locais do administrador foram injetados com sucesso. Não se esqueça de guardar as alterações!'
+      );
+    }
+  }
+
   // Função para escolher a foto da galeria
   async function escolherFoto() {
     let resultado = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true, // Permite ao utilizador cortar a foto em formato quadrado
+      allowsEditing: true, 
       aspect: [1, 1],
       quality: 0.5,
     });
@@ -71,7 +96,6 @@ export default function Perfil() {
             </View>
           )}
           
-          {/* Ícone de editar sobreposto à foto */}
           <View style={[styles.iconeEditarFoto, { backgroundColor: colors.primary }]}>
             <Ionicons name="camera" size={16} color="#FFFFFF" />
           </View>
@@ -89,7 +113,7 @@ export default function Perfil() {
             placeholder="Ex: João Silva"
             placeholderTextColor="gray"
             value={nome}
-            onChangeText={setNome}
+            onChangeText={aoMudarNome}
           />
         </View>
 
@@ -134,12 +158,10 @@ const styles = StyleSheet.create({
   fotoPlaceholder: { width: 120, height: 120, borderRadius: 60, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: '#2A2A2A' },
   iconeEditarFoto: { position: 'absolute', bottom: 0, right: 0, padding: 8, borderRadius: 20, borderWidth: 2, borderColor: '#121212' },
   textoAjuda: { marginTop: 12, fontSize: 14 },
-  
   cartao: { borderRadius: 12, borderWidth: 1, padding: 16 },
   inputContainer: { marginBottom: 16 },
   label: { fontSize: 14, fontWeight: 'bold', marginBottom: 8 },
   input: { borderWidth: 1, borderRadius: 8, padding: 12, fontSize: 16 },
-  
   botaoSalvar: { padding: 16, borderRadius: 8, alignItems: 'center', marginTop: 8 },
   textoBotaoSalvar: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' }
 });

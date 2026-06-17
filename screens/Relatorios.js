@@ -64,33 +64,35 @@ export default function Relatorios() {
   const chartConfig = {
     backgroundGradientFrom: colors.card,
     backgroundGradientTo: colors.card,
-    color: (opacity = 1) => colors.primary, // Cor base
+    color: (opacity = 1) => colors.primary, 
     labelColor: (opacity = 1) => colors.text,
     barPercentage: 0.8,
     fillShadowGradientOpacity: 1,
   };
 
-  // Preparação inteligente dos dados
+  // Preparação com compressão matemática
   const barChartData = {
-    // 1ª Modificação: Deixamos as labels em branco para não poluir o eixo X
     labels: dadosGrafico.map(() => ''), 
     datasets: [
       {
-        data: dadosGrafico.map(item => item.valor),
-        // 2ª Modificação: Injetamos a cor específica de cada categoria na respetiva barra
+        // MODIFICAÇÃO CRÍTICA: Aplicamos Math.sqrt para achatar a diferença visual das barras
+        data: dadosGrafico.map(item => Math.sqrt(item.valor)),
         colors: dadosGrafico.map(item => () => item.color) 
       }
     ]
   };
 
-  // Função para formatar os valores muito altos (10000 -> 10k)
+  // Função para reverter a compressão exclusivamente no texto do eixo lateral
   function formatarEixoY(valorY) {
     const num = parseFloat(valorY);
-    if (num >= 1000) {
-      // Divide por 1000, deixa 1 casa decimal e remove o ".0" se for número inteiro (ex: 10.0k -> 10k)
-      return (num / 1000).toFixed(1).replace('.0', '') + 'k';
+    
+    // Elevamos ao quadrado para descobrir e exibir o valor real original
+    const valorReal = Math.pow(num, 2);
+    
+    if (valorReal >= 1000) {
+      return (valorReal / 1000).toFixed(1).replace('.0', '') + 'k';
     }
-    return Math.round(num).toString();
+    return Math.round(valorReal).toString();
   }
 
   return (
@@ -110,10 +112,10 @@ export default function Relatorios() {
             yAxisLabel="R$ "
             chartConfig={chartConfig}
             fromZero={true}
-            showValuesOnTopOfBars={false} // Retiramos os números encavalitados do topo
-            withCustomBarColorFromData={true} // Dizemos ao gráfico para usar a nossa paleta de cores
-            flatColor={true} // Tira o efeito de gradiente/transparência para ficar idêntico à bolinha da legenda
-            formatYLabel={formatarEixoY} // Formata para "10k" se passar de mil
+            showValuesOnTopOfBars={false} 
+            withCustomBarColorFromData={true} 
+            flatColor={true} 
+            formatYLabel={formatarEixoY} // Renderiza os números corrigidos (Ex: 10k, 2.5k, 500)
             style={{
               paddingRight: 0,
               paddingTop: 16,
@@ -122,7 +124,7 @@ export default function Relatorios() {
         </View>
       )}
 
-      {/* Lista detalhada por baixo do gráfico */}
+      {/* A lista detalhada permanece intacta e com os valores reais perfeitos */}
       <View style={styles.resumoContainer}>
         <Text style={[styles.subtitulo, { color: colors.text }]}>Detalhes e Legenda</Text>
         {dadosGrafico.map((item, index) => (
