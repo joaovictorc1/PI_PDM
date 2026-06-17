@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "",
+    "name": "Wisecash",
     "slug": "Wisecash",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -20,10 +20,17 @@
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#075900"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": false,
+      "package": "com.marcus67.Wisecash"
     },
     "plugins": [
       "@react-native-community/datetimepicker"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "131df6e3-c97c-48c7-8249-20afb941dbdf"
+      }
+    },
+    "owner": "marcus67"
   }
 }

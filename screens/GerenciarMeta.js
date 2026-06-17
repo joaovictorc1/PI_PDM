@@ -1,19 +1,30 @@
 import { View, Text, StyleSheet, TextInput, ScrollView, Alert, Pressable } from 'react-native';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTheme } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 
-export default function GerenciarMeta({ navigation }) {
+// O 'route' foi adicionado aqui para podermos receber os dados da tela anterior
+export default function GerenciarMeta({ navigation, route }) {
   const { colors } = useTheme();
 
-  // Estados do formulário transferidos para cá
-  const [nomeMeta, setNomeMeta] = useState('');
-  const [valorAlvo, setValorAlvo] = useState('');
-  const [depositoMensal, setDepositoMensal] = useState('');
-  const [taxaJuros, setTaxaJuros] = useState('');
+  // Verifica se estamos a editar uma meta existente recebida por parâmetro
+  const metaEditada = route.params?.metaEditada;
 
-  // Lógica matemática idêntica à original
+  // Se houver uma metaEditada, os estados já começam preenchidos com os dados dela
+  const [nomeMeta, setNomeMeta] = useState(metaEditada ? metaEditada.nome : '');
+  const [valorAlvo, setValorAlvo] = useState(metaEditada ? metaEditada.valorAlvo.toString() : '');
+  const [depositoMensal, setDepositoMensal] = useState(metaEditada ? metaEditada.depositoMensal.toString() : '');
+  // Adicionámos suporte para guardar e recuperar a taxa de juros!
+  const [taxaJuros, setTaxaJuros] = useState(metaEditada && metaEditada.taxaJuros ? metaEditada.taxaJuros.toString() : '');
+
+  // Muda o título da tela de "Planejar Nova Meta" para "Editar Meta" caso seja uma edição
+  useEffect(() => {
+    if (metaEditada) {
+      navigation.setOptions({ title: 'Editar Meta' });
+    }
+  }, [metaEditada, navigation]);
+
   function calcularPrevisao() {
     const alvo = parseFloat(valorAlvo.replace(',', '.'));
     const aporte = parseFloat(depositoMensal.replace(',', '.'));
@@ -38,30 +49,40 @@ export default function GerenciarMeta({ navigation }) {
 
   const projecao = calcularPrevisao();
 
-  // Guarda puxando os dados atuais direto do banco local antes de empilhar
   async function guardarMeta() {
     if (!nomeMeta.trim() || !projecao) {
       Alert.alert('Aviso', 'Preencha todos os campos corretamente para simular e guardar a meta.');
       return;
     }
 
+    // Se estivermos a editar, mantemos o ID antigo. Se for nova, criamos um ID novo.
+    const idMeta = metaEditada ? metaEditada.id : Math.random().toString();
+
     const novaMeta = {
-      id: Math.random().toString(),
+      id: idMeta,
       nome: nomeMeta,
       valorAlvo: parseFloat(valorAlvo.replace(',', '.')),
       depositoMensal: parseFloat(depositoMensal.replace(',', '.')),
+      taxaJuros: parseFloat(taxaJuros.replace(',', '.')), // Agora guardamos a taxa!
       previsaoData: projecao.data,
       meses: projecao.meses
     };
 
     try {
       const dadosAtuais = await AsyncStorage.getItem('@metas_wisecash');
-      const listaAtual = dadosAtuais ? JSON.parse(dadosAtuais) : [];
-      const novaLista = [...listaAtual, novaMeta];
+      let listaAtual = dadosAtuais ? JSON.parse(dadosAtuais) : [];
+
+      if (metaEditada) {
+        // Modo Edição: Substitui a meta antiga pela meta atualizada na lista
+        listaAtual = listaAtual.map(item => item.id === idMeta ? novaMeta : item);
+      } else {
+        // Modo Criação: Apenas empilha no final
+        listaAtual = [...listaAtual, novaMeta];
+      }
       
-      await AsyncStorage.setItem('@metas_wisecash', JSON.stringify(novaLista));
+      await AsyncStorage.setItem('@metas_wisecash', JSON.stringify(listaAtual));
       
-      Alert.alert('Sucesso', 'A sua meta foi guardada com sucesso!', [
+      Alert.alert('Sucesso', metaEditada ? 'A meta foi atualizada!' : 'A meta foi guardada!', [
         { text: 'OK', onPress: () => navigation.goBack() }
       ]);
     } catch (error) {
@@ -134,7 +155,9 @@ export default function GerenciarMeta({ navigation }) {
             style={({ pressed }) => [styles.botaoGuardar, pressed && { opacity: 0.8 }]} 
             onPress={guardarMeta}
           >
-            <Text style={styles.textoBotaoGuardar}>GUARDAR ESTA META</Text>
+            <Text style={styles.textoBotaoGuardar}>
+              {metaEditada ? 'ATUALIZAR META' : 'GUARDAR ESTA META'}
+            </Text>
           </Pressable>
         </View>
       )}

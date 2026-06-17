@@ -1,11 +1,12 @@
 import { View, Text, StyleSheet, ScrollView, Alert, Pressable } from 'react-native';
 import { useState, useCallback } from 'react';
-import { useTheme, useFocusEffect } from '@react-navigation/native';
+import { useTheme, useFocusEffect, useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function Metas() {
   const { colors } = useTheme();
+  const navigation = useNavigation();
   const [listaMetas, setListaMetas] = useState([]);
 
   useFocusEffect(
@@ -23,13 +24,26 @@ export default function Metas() {
   );
 
   async function apagarMeta(id) {
-    try {
-      const novaLista = listaMetas.filter(meta => meta.id !== id);
-      await AsyncStorage.setItem('@metas_wisecash', JSON.stringify(novaLista));
-      setListaMetas(novaLista);
-    } catch (error) {
-      Alert.alert('Erro', 'Não foi possível apagar a meta.');
-    }
+    Alert.alert(
+      'Apagar Meta',
+      'Tem a certeza de que deseja apagar esta meta?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { 
+          text: 'Apagar', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const novaLista = listaMetas.filter(meta => meta.id !== id);
+              await AsyncStorage.setItem('@metas_wisecash', JSON.stringify(novaLista));
+              setListaMetas(novaLista);
+            } catch (error) {
+              Alert.alert('Erro', 'Não foi possível apagar a meta.');
+            }
+          }
+        }
+      ]
+    );
   }
 
   return (
@@ -54,9 +68,19 @@ export default function Metas() {
                 </Text>
               </View>
               
-              <Pressable onPress={() => apagarMeta(meta.id)} style={styles.botaoApagar}>
-                <Ionicons name="trash-outline" size={24} color="#FF4C4C" />
-              </Pressable>
+              {/* --- BOTÕES DE AÇÃO LADO A LADO --- */}
+              <View style={styles.acoesContainer}>
+                <Pressable 
+                  onPress={() => navigation.navigate('GerenciarMeta', { metaEditada: meta })} 
+                  style={styles.botaoAcao}
+                >
+                  <Ionicons name="pencil-outline" size={24} color={colors.primary} />
+                </Pressable>
+
+                <Pressable onPress={() => apagarMeta(meta.id)} style={styles.botaoAcao}>
+                  <Ionicons name="trash-outline" size={24} color="#FF4C4C" />
+                </Pressable>
+              </View>
             </View>
           ))}
         </View>
@@ -69,5 +93,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
   titulo: { fontSize: 22, fontWeight: 'bold', marginBottom: 20 },
   cartaoMetaGuardada: { flexDirection: 'row', padding: 16, borderRadius: 12, borderWidth: 1, marginBottom: 12, alignItems: 'center', justifyContent: 'space-between' },
-  botaoApagar: { padding: 8 }
+  acoesContainer: { flexDirection: 'row', alignItems: 'center' },
+  botaoAcao: { padding: 8, marginLeft: 4 }
 });
