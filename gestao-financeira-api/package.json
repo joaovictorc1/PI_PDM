@@ -1,13 +1,26 @@
 {
   "name": "gestao-financeira-api",
   "version": "1.0.0",
-  "description": "",
   "main": "index.js",
+  "type": "commonjs",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "db:migrate": "prisma migrate dev --name init",
+    "db:generate": "prisma generate",
+    "db:studio": "prisma studio",
+    "db:reset": "prisma migrate reset"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs"
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^5.x",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.x",
+    "pg": "^8.21.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.x",
+    "prisma": "^5.x"
+  }
 }
