@@ -26,11 +26,10 @@ app.get('/health', async (req, res) => {
   }
 });
 
-// ── Rotas (descomentar à medida que forem criadas) ─────────
-// app.use('/api/users',      require('./src/routes/users'));
-// app.use('/api/transacoes', require('./src/routes/transacoes'));
-// app.use('/api/metas',      require('./src/routes/metas'));
-// app.use('/api/orcamentos', require('./src/routes/orcamentos'));
+// ── Rotas ──────────────────────────────────────────────────
+app.use('/api/transacoes', require('./src/routes/transacoes.routes'));
+app.use('/api/metas',      require('./src/routes/metas.routes'));
+app.use('/api/orcamentos', require('./src/routes/orcamentos.routes'));
 
 // ── Handler de rotas inexistentes ─────────────────────────
 app.use((req, res) => {
