@@ -8,7 +8,7 @@ const BASE_URL = 'http://192.168.1.28:3333/api';
 
 // ─── Temporário até implementar JWT ───────────────────────
 // Substituir por: extrair o userId do token após fazer login
-const TEMP_USER_ID = 'substituir-pelo-id-real-do-utilizador';
+const TEMP_USER_ID = null;
 
 // ─── Wrapper base ──────────────────────────────────────────
 async function request(path, options = {}) {

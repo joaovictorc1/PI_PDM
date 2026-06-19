@@ -5,10 +5,10 @@ const { toDbCategoria, serializeTransacao } = require('../lib/helpers');
 // GET /api/transacoes?userId=&filtro=todas|recentes
 async function listar(req, res) {
   const { userId, filtro } = req.query;
-  if (!userId) return res.status(400).json({ error: 'userId é obrigatório' });
+  //if (!userId) return res.status(400).json({ error: 'userId é obrigatório' });
 
   try {
-    const where = { userId };
+    const where = userId ? { userId } : {};
 
     if (filtro === 'recentes') {
       const seteDiasAtras = new Date();
@@ -32,9 +32,17 @@ async function listar(req, res) {
 // Cria transação simples OU grupo de parcelas (isParcelado + numeroParcelas)
 async function criar(req, res) {
   const { userId, descricao, valor, data, categoria, tags, anexo, isParcelado, numeroParcelas } = req.body;
+  // 1. Adicione um console.log para você ver no terminal exatamente o que o App enviou:
+  console.log("Dados recebidos do App (Transações):", req.body);
 
-  if (!userId || !descricao || valor == null || !data) {
-    return res.status(400).json({ error: 'userId, descricao, valor e data são obrigatórios' });
+  // 2. Filtro blindado para o userId:
+  let idParaSalvar = null;
+  if (userId && typeof userId === 'string' && userId.trim() !== '' && userId !== 'null' && userId !== 'undefined' && userId !== 'substituir-pelo-id-real-do-utilizador') {
+      idParaSalvar = userId;
+  }
+
+  if (!descricao || valor == null || !data) { 
+    return res.status(400).json({ error: 'descricao, valor e data são obrigatórios' }); 
   }
 
   try {
@@ -66,7 +74,7 @@ async function criar(req, res) {
               categoria:          categoriaDb,
               tags:               tags  ?? '',
               anexo:              anexo ?? null,
-              userId,
+              userId:             idParaSalvar,
             },
           });
         })
@@ -80,7 +88,7 @@ async function criar(req, res) {
           categoria: categoriaDb,
           tags:      tags  ?? '',
           anexo:     anexo ?? null,
-          userId,
+          userId:  idParaSalvar,
         },
       });
       criadas = [t];

@@ -4,11 +4,11 @@ const { serializeMeta }   = require('../lib/helpers');
 // GET /api/metas?userId=
 async function listar(req, res) {
   const { userId } = req.query;
-  if (!userId) return res.status(400).json({ error: 'userId é obrigatório' });
+  //if (!userId) return res.status(400).json({ error: 'userId é obrigatório' });
 
   try {
     const metas = await prisma.meta.findMany({
-      where:   { userId },
+      where: userId ? { userId } : {},
       orderBy: { createdAt: 'desc' },
     });
     res.json(metas.map(serializeMeta));
@@ -21,6 +21,13 @@ async function listar(req, res) {
 // POST /api/metas
 async function criar(req, res) {
   const { userId, nome, valorAlvo, depositoMensal, taxaJuros, previsaoData, meses } = req.body;
+
+  console.log("Dados recebidos do App (Metas):", req.body);
+
+  let idParaSalvar = null;
+  if (userId && typeof userId === 'string' && userId.trim() !== '' && userId !== 'null' && userId !== 'undefined' && userId !== 'substituir-pelo-id-real-do-utilizador') {
+      idParaSalvar = userId;
+  }
 
   if (!userId || !nome || valorAlvo == null || depositoMensal == null || !previsaoData || meses == null) {
     return res.status(400).json({ error: 'Campos obrigatórios em falta' });
@@ -35,7 +42,7 @@ async function criar(req, res) {
         taxaJuros:      taxaJuros ? parseFloat(taxaJuros) : 0,
         previsaoData,
         meses:          parseInt(meses),
-        userId,
+        userId:       idParaSalvar,
       },
     });
     res.status(201).json(serializeMeta(meta));
