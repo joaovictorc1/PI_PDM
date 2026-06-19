@@ -1,14 +1,5 @@
-import { PrismaClient } from '@prisma/client';
-import { Pool } from 'pg';
-import { PrismaPg } from '@prisma/adapter-pg';
+const { PrismaClient } = require('@prisma/client');
 
-const connectionString = process.env.DATABASE_URL;
+const prisma = new PrismaClient();
 
-// Configuração do pool de ligações nativo do Postgres
-const pool = new Pool({ connectionString });
-const adapter = new PrismaPg(pool);
-
-// Inicialização do cliente Prisma v7 (Adaptador obrigatório)
-const prisma = new PrismaClient({ adapter });
-
-export default prisma;
+module.exports = prisma;

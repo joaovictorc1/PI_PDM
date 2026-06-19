@@ -10,24 +10,24 @@ export default function Metas() {
   const [carregando, setCarregando] = useState(false); 
   const [erro, setErro] = useState(null);              
 
+const carregarMetas = useCallback(async () => {
+    setCarregando(true);
+    setErro(null);
+    try {
+      const dados = await metasApi.listar();
+      setListaMetas(dados);
+    } catch (error) {
+      console.error('Erro ao carregar metas', error);
+      setErro('Não foi possível ligar ao servidor.');
+    } finally {
+      setCarregando(false);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
-      async function carregarMetas() {
-        setCarregando(true);
-        setErro(null);
-
-        try {
-          const dados = await metasApi.listar();
-          setListaMetas(dados);
-        } catch (error) {
-          console.error('Erro ao carregar metas', error);
-          setErro('Não foi possível ligar ao servidor.');
-        } finally {
-          setCarregando(false);
-        }
-      }
       carregarMetas();
-    }, [])
+    }, [carregarMetas])
   );
 
 async function apagarMeta(id) {

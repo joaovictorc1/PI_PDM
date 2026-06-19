@@ -4,10 +4,7 @@ import { Platform } from 'react-native';
 // Android Emulator ↔ 10.0.2.2 aponta ao localhost do host
 // Dispositivo físico na mesma rede ↔ IP local da máquina (ex: 192.168.1.x)
 // iOS Simulator ↔ localhost funciona diretamente
-const BASE_URL =
-  Platform.OS === 'android'
-    ? 'http://10.0.2.2:3333/api'
-    : 'http://localhost:3333/api';
+const BASE_URL = 'http://192.168.1.28:3333/api';
 
 // ─── Temporário até implementar JWT ───────────────────────
 // Substituir por: extrair o userId do token após fazer login

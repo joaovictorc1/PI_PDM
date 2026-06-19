@@ -27,9 +27,9 @@ app.get('/health', async (req, res) => {
 });
 
 // ── Rotas ──────────────────────────────────────────────────
-app.use('/api/transacoes', require('./src/routes/transacoes.routes'));
-app.use('/api/metas',      require('./src/routes/metas.routes'));
-app.use('/api/orcamentos', require('./src/routes/orcamentos.routes'));
+app.use('/api/transacoes', require('./routes/transacoes.routes'));
+app.use('/api/metas',      require('./routes/metas.routes'));
+app.use('/api/orcamentos', require('./routes/orcamentos.routes'));
 
 // ── Handler de rotas inexistentes ─────────────────────────
 app.use((req, res) => {

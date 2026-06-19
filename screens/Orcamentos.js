@@ -22,52 +22,48 @@ export default function Orcamentos() {
   const [salvando, setSalvando] = useState(false); 
 
   // Carrega os gastos do mês e os limites guardados
+const carregarDados = useCallback(async () => {
+    setCarregando(true);
+    setErro(null);
+
+    try {
+      const [limitesGuardados, todasTransacoes] = await Promise.all([
+        orcamentosApi.listar(),
+        transacoesApi.listar()
+      ]);
+
+      if (limitesGuardados) setLimites(limitesGuardados);
+
+      const dataAtual = new Date();
+      const mesAtual = dataAtual.getMonth();
+      const anoAtual = dataAtual.getFullYear();
+
+      const calculoGastos = {};
+      CATEGORIAS_DISPONIVEIS.forEach(cat => calculoGastos[cat] = 0);
+
+      todasTransacoes.forEach(transacao => {
+        const dataTransacao = new Date(transacao.data);
+        if (dataTransacao.getMonth() === mesAtual && 
+            dataTransacao.getFullYear() === anoAtual && 
+            CATEGORIAS_DISPONIVEIS.includes(transacao.categoria)) {
+          calculoGastos[transacao.categoria] += transacao.valor;
+        }
+      });
+
+      setGastosAtuais(calculoGastos);
+
+    } catch (error) {
+      console.error('Erro ao carregar orçamentos:', error);
+      setErro('Não foi possível ligar ao servidor.');
+    } finally {
+      setCarregando(false);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
-      async function carregarDados() {
-        setCarregando(true);
-        setErro(null);
-
-        try {
-          // Busca os limites e as transações do servidor ao mesmo tempo
-          const [limitesGuardados, todasTransacoes] = await Promise.all([
-            orcamentosApi.listar(),
-            transacoesApi.listar()
-          ]);
-
-          // 1. Atualiza os limites (O backend deve devolver um objeto ex: { Lazer: 500 })
-          if (limitesGuardados) {
-            setLimites(limitesGuardados);
-          }
-
-          // 2. Calcula as despesas do mês atual
-          const dataAtual = new Date();
-          const mesAtual = dataAtual.getMonth();
-          const anoAtual = dataAtual.getFullYear();
-
-          const calculoGastos = {};
-          CATEGORIAS_DISPONIVEIS.forEach(cat => calculoGastos[cat] = 0);
-
-          todasTransacoes.forEach(transacao => {
-            const dataTransacao = new Date(transacao.data);
-            
-            if (dataTransacao.getMonth() === mesAtual && 
-                dataTransacao.getFullYear() === anoAtual && 
-                CATEGORIAS_DISPONIVEIS.includes(transacao.categoria)) {
-              calculoGastos[transacao.categoria] += transacao.valor;
-            }
-          });
-
-          setGastosAtuais(calculoGastos);
-
-        } catch (error) {
-          console.error('Erro ao carregar orçamentos:', error);
-          setErro('Não foi possível ligar ao servidor.');
-        } finally {
-          setCarregando(false);
-        }
-      }
-    }, [])
+      carregarDados();
+    }, [carregarDados])
   );
 
   function abrirModal(categoria) {

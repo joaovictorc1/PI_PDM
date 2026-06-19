@@ -24,86 +24,86 @@ export default function Dashboard() {
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState(null);
 
+  const carregarDadosGlobais = useCallback(async () => {
+    setCarregando(true);
+    setErro(null);
+
+    try {
+      // 1. Perfil (Mantido no armazenamento local)
+      const dadosPerfil = await AsyncStorage.getItem('@perfil_wisecash');
+      if (dadosPerfil) {
+        const perfilSalvo = JSON.parse(dadosPerfil);
+        setPerfil({ nome: perfilSalvo.nome || '', foto: perfilSalvo.foto || null });
+      }
+
+      // 2. Busca simultânea no servidor para orçamentos e transações
+      const [limitesGuardados, todasTransacoes] = await Promise.all([
+        orcamentosApi.listar(),
+        transacoesApi.listar()
+      ]);
+
+      setLimitesCategorias(limitesGuardados || {});
+
+      // 3. Cálculos e Processamento das Transações
+      if (todasTransacoes && todasTransacoes.length > 0) {
+        const dataActual = new Date();
+        const mesActual = dataActual.getMonth();
+        const anoActual = dataActual.getFullYear();
+
+        // Filtrar transações ocorridas no mês atual
+        const transacoesDoMes = todasTransacoes.filter(item => {
+          const dataItem = new Date(item.data);
+          return dataItem.getMonth() === mesActual && 
+                 dataItem.getFullYear() === anoActual &&
+                 dataItem <= dataActual;
+        });
+
+        // Gasto global
+        const totalGlobal = transacoesDoMes.reduce((soma, item) => soma + item.valor, 0);
+        setGastoMensal(totalGlobal);
+
+        // Gasto individual por categoria
+        const mapaGastos = {};
+        CATEGORIAS_DISPONIVEIS.forEach(cat => mapaGastos[cat] = 0);
+        transacoesDoMes.forEach(item => {
+          const cat = item.categoria || 'Outros';
+          if (CATEGORIAS_DISPONIVEIS.includes(cat)) {
+            mapaGastos[cat] += item.valor;
+          }
+        });
+        setGastosPorCategoria(mapaGastos);
+
+        // Alertas de vencimento (Próximos 3 dias)
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0); 
+        const daquiA3Dias = new Date(hoje);
+        daquiA3Dias.setDate(hoje.getDate() + 3);
+        daquiA3Dias.setHours(23, 59, 59, 999);
+
+        const alertas = todasTransacoes.filter(item => {
+          const dataItem = new Date(item.data);
+          return dataItem >= hoje && dataItem <= daquiA3Dias;
+        });
+
+        alertas.sort((a, b) => new Date(a.data) - new Date(b.data));
+        setContasAVencer(alertas);
+      } else {
+        setGastoMensal(0);
+        setContasAVencer([]);
+        setGastosPorCategoria({});
+      }
+    } catch (error) {
+      console.error('Erro ao carregar dados no dashboard', error);
+      setErro('Não foi possível ligar ao servidor para atualizar o painel.');
+    } finally {
+      setCarregando(false);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
-      async function carregarDadosGlobais() {
-        setCarregando(true);
-        setErro(null);
-
-        try {
-          // 1. Perfil (Mantido no armazenamento local)
-          const dadosPerfil = await AsyncStorage.getItem('@perfil_wisecash');
-          if (dadosPerfil) {
-            const perfilSalvo = JSON.parse(dadosPerfil);
-            setPerfil({ nome: perfilSalvo.nome || '', foto: perfilSalvo.foto || null });
-          }
-
-          // 2. Busca simultânea no servidor para orçamentos e transações
-          const [limitesGuardados, todasTransacoes] = await Promise.all([
-            orcamentosApi.listar(),
-            transacoesApi.listar()
-          ]);
-
-          setLimitesCategorias(limitesGuardados || {});
-
-          // 3. Cálculos e Processamento das Transações
-          if (todasTransacoes && todasTransacoes.length > 0) {
-            const dataActual = new Date();
-            const mesActual = dataActual.getMonth();
-            const anoActual = dataActual.getFullYear();
-
-            // Filtrar transações ocorridas no mês atual
-            const transacoesDoMes = todasTransacoes.filter(item => {
-              const dataItem = new Date(item.data);
-              return dataItem.getMonth() === mesActual && 
-                     dataItem.getFullYear() === anoActual &&
-                     dataItem <= dataActual;
-            });
-
-            // Gasto global
-            const totalGlobal = transacoesDoMes.reduce((soma, item) => soma + item.valor, 0);
-            setGastoMensal(totalGlobal);
-
-            // Gasto individual por categoria
-            const mapaGastos = {};
-            CATEGORIAS_DISPONIVEIS.forEach(cat => mapaGastos[cat] = 0);
-            transacoesDoMes.forEach(item => {
-              const cat = item.categoria || 'Outros';
-              if (CATEGORIAS_DISPONIVEIS.includes(cat)) {
-                mapaGastos[cat] += item.valor;
-              }
-            });
-            setGastosPorCategoria(mapaGastos);
-
-            // Alertas de vencimento (Próximos 3 dias)
-            const hoje = new Date();
-            hoje.setHours(0, 0, 0, 0); 
-            const daquiA3Dias = new Date(hoje);
-            daquiA3Dias.setDate(hoje.getDate() + 3);
-            daquiA3Dias.setHours(23, 59, 59, 999);
-
-            const alertas = todasTransacoes.filter(item => {
-              const dataItem = new Date(item.data);
-              return dataItem >= hoje && dataItem <= daquiA3Dias;
-            });
-
-            alertas.sort((a, b) => new Date(a.data) - new Date(b.data));
-            setContasAVencer(alertas);
-          } else {
-            // Se a API não devolver transações, zera os indicadores
-            setGastoMensal(0);
-            setContasAVencer([]);
-            setGastosPorCategoria({});
-          }
-        } catch (error) {
-          console.error('Erro ao carregar dados no dashboard', error);
-          setErro('Não foi possível ligar ao servidor para atualizar o painel.');
-        } finally {
-          setCarregando(false);
-        }
-      }
       carregarDadosGlobais();
-    }, [])
+    }, [carregarDadosGlobais])
   );
 
   const categoriasComLimite = Object.keys(limitesCategorias);
