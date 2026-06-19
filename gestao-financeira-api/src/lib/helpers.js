@@ -44,4 +44,18 @@ function serializeMeta(m) {
   };
 }
 
-module.exports = { toDbCategoria, toFrontendCategoria, serializeTransacao, serializeMeta };
+function sanitizeUserId(value) {
+  if (
+    !value ||
+    typeof value !== 'string' ||
+    value.trim() === '' ||
+    value === 'null' ||
+    value === 'undefined' ||
+    value === 'substituir-pelo-id-real-do-utilizador'
+  ) {
+    return null;
+  }
+  return value;
+}
+
+module.exports = { toDbCategoria, toFrontendCategoria, serializeTransacao, serializeMeta, sanitizeUserId };

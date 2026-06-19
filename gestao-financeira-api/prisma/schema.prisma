@@ -117,11 +117,9 @@ model Orcamento {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Um utilizador só pode ter um limite por categoria
-  @@unique([userId, categoria])
   @@index([userId])
   @@map("orcamentos")
 }

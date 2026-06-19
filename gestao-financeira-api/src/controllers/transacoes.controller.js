@@ -3,24 +3,19 @@ const prisma               = require('../lib/prisma');
 const { toDbCategoria, serializeTransacao } = require('../lib/helpers');
 
 // GET /api/transacoes?userId=&filtro=todas|recentes
-async function listar(req, res) {
-  const { userId, filtro } = req.query;
-  //if (!userId) return res.status(400).json({ error: 'userId é obrigatório' });
+const { sanitizeUserId } = require('../lib/helpers');
 
+async function listar(req, res) {
+  const userId = sanitizeUserId(req.query.userId);
+  const { filtro } = req.query;
   try {
     const where = userId ? { userId } : {};
-
     if (filtro === 'recentes') {
       const seteDiasAtras = new Date();
       seteDiasAtras.setDate(seteDiasAtras.getDate() - 7);
       where.data = { gte: seteDiasAtras };
     }
-
-    const transacoes = await prisma.transacao.findMany({
-      where,
-      orderBy: { data: 'desc' },
-    });
-
+    const transacoes = await prisma.transacao.findMany({ where, orderBy: { data: 'desc' } });
     res.json(transacoes.map(serializeTransacao));
   } catch (err) {
     console.error('[transacoes.listar]', err);
@@ -32,49 +27,47 @@ async function listar(req, res) {
 // Cria transação simples OU grupo de parcelas (isParcelado + numeroParcelas)
 async function criar(req, res) {
   const { userId, descricao, valor, data, categoria, tags, anexo, isParcelado, numeroParcelas } = req.body;
-  // 1. Adicione um console.log para você ver no terminal exatamente o que o App enviou:
-  console.log("Dados recebidos do App (Transações):", req.body);
+  const idParaSalvar = sanitizeUserId(userId);
 
-  // 2. Filtro blindado para o userId:
-  let idParaSalvar = null;
-  if (userId && typeof userId === 'string' && userId.trim() !== '' && userId !== 'null' && userId !== 'undefined' && userId !== 'substituir-pelo-id-real-do-utilizador') {
-      idParaSalvar = userId;
+  if (!descricao || typeof descricao !== 'string' || !descricao.trim() || descricao.length > 120) {
+    return res.status(400).json({ error: 'descricao inválida' });
   }
 
-  if (!descricao || valor == null || !data) { 
-    return res.status(400).json({ error: 'descricao, valor e data são obrigatórios' }); 
+  const valorTotal = parseFloat(valor);
+  if (!Number.isFinite(valorTotal) || valorTotal <= 0) {
+    return res.status(400).json({ error: 'valor deve ser um número positivo' });
+  }
+
+  const dataBase = new Date(data);
+  if (!data || isNaN(dataBase.getTime())) {
+    return res.status(400).json({ error: 'data inválida' });
   }
 
   try {
-    const valorTotal  = parseFloat(valor);
     const categoriaDb = toDbCategoria(categoria ?? 'Outros');
-    const dataBase    = new Date(data);
-
     let criadas;
 
-    if (isParcelado && parseInt(numeroParcelas) > 1) {
-      const qtd            = parseInt(numeroParcelas);
-      const valorParcela   = valorTotal / qtd;
-      const grupoId        = randomUUID();
+    if (isParcelado && parseInt(numeroParcelas, 10) > 1) {
+      const qtd = Math.min(parseInt(numeroParcelas, 10), 60); // limite defensivo
+      const valorParcela = valorTotal / qtd;
+      const grupoId = randomUUID();
 
-      // Cria todas as parcelas numa única transação atómica no DB
       criadas = await prisma.$transaction(
         Array.from({ length: qtd }, (_, i) => {
           const dataParcela = new Date(dataBase);
           dataParcela.setMonth(dataParcela.getMonth() + i);
-
           return prisma.transacao.create({
             data: {
               grupoId,
-              descricaoBase:      descricao,
-              descricao:          `${descricao} (${i + 1}/${qtd})`,
-              valor:              valorParcela,
+              descricaoBase: descricao,
+              descricao: `${descricao} (${i + 1}/${qtd})`,
+              valor: valorParcela,
               valorTotalDaCompra: valorTotal,
-              data:               dataParcela,
-              categoria:          categoriaDb,
-              tags:               tags  ?? '',
-              anexo:              anexo ?? null,
-              userId:             idParaSalvar,
+              data: dataParcela,
+              categoria: categoriaDb,
+              tags: typeof tags === 'string' ? tags.slice(0, 200) : '',
+              anexo: anexo ?? null,
+              userId: idParaSalvar,
             },
           });
         })
@@ -83,12 +76,12 @@ async function criar(req, res) {
       const t = await prisma.transacao.create({
         data: {
           descricao,
-          valor:     valorTotal,
-          data:      dataBase,
+          valor: valorTotal,
+          data: dataBase,
           categoria: categoriaDb,
-          tags:      tags  ?? '',
-          anexo:     anexo ?? null,
-          userId:  idParaSalvar,
+          tags: typeof tags === 'string' ? tags.slice(0, 200) : '',
+          anexo: anexo ?? null,
+          userId: idParaSalvar,
         },
       });
       criadas = [t];
@@ -100,6 +93,7 @@ async function criar(req, res) {
     res.status(500).json({ error: 'Erro ao criar transação' });
   }
 }
+
 
 // PUT /api/transacoes/:id
 async function atualizar(req, res) {

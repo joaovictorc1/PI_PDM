@@ -1,10 +1,11 @@
-const prisma              = require('../lib/prisma');
-const { serializeMeta }   = require('../lib/helpers');
+const prisma = require('../lib/prisma');
+// 1. Importar o sanitizeUserId junto com o serializeMeta
+const { serializeMeta, sanitizeUserId } = require('../lib/helpers');
 
 // GET /api/metas?userId=
 async function listar(req, res) {
-  const { userId } = req.query;
-  //if (!userId) return res.status(400).json({ error: 'userId é obrigatório' });
+  // 2. Usar a função para limpar o ID
+  const userId = sanitizeUserId(req.query.userId);
 
   try {
     const metas = await prisma.meta.findMany({
@@ -22,14 +23,11 @@ async function listar(req, res) {
 async function criar(req, res) {
   const { userId, nome, valorAlvo, depositoMensal, taxaJuros, previsaoData, meses } = req.body;
 
-  console.log("Dados recebidos do App (Metas):", req.body);
+  // 3. Limpar o ID antes de verificar e salvar
+  const idParaSalvar = sanitizeUserId(userId);
 
-  let idParaSalvar = null;
-  if (userId && typeof userId === 'string' && userId.trim() !== '' && userId !== 'null' && userId !== 'undefined' && userId !== 'substituir-pelo-id-real-do-utilizador') {
-      idParaSalvar = userId;
-  }
-
-  if (!userId || !nome || valorAlvo == null || depositoMensal == null || !previsaoData || meses == null) {
+  // 4. REMOVIDO O !userId DESTA VALIDAÇÃO
+  if (!nome || valorAlvo == null || depositoMensal == null || !previsaoData || meses == null) {
     return res.status(400).json({ error: 'Campos obrigatórios em falta' });
   }
 
@@ -37,14 +35,15 @@ async function criar(req, res) {
     const meta = await prisma.meta.create({
       data: {
         nome,
-        valorAlvo:      parseFloat(valorAlvo),
+        valorAlvo: parseFloat(valorAlvo),
         depositoMensal: parseFloat(depositoMensal),
-        taxaJuros:      taxaJuros ? parseFloat(taxaJuros) : 0,
+        taxaJuros: taxaJuros ? parseFloat(taxaJuros) : 0,
         previsaoData,
-        meses:          parseInt(meses),
-        userId:       idParaSalvar,
+        meses: parseInt(meses),
+        userId: idParaSalvar, // 5. Usando o ID limpo
       },
     });
+
     res.status(201).json(serializeMeta(meta));
   } catch (err) {
     console.error('[metas.criar]', err);

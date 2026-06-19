@@ -74,19 +74,15 @@ const carregarDados = useCallback(async () => {
 
   async function guardarLimite() {
     const valorFloat = parseFloat(valorInput.replace(',', '.'));
-    
     if (isNaN(valorFloat) || valorFloat <= 0) {
       Alert.alert('Aviso', 'Introduza um valor válido maior que zero.');
       return;
     }
 
     setSalvando(true);
-    const novosLimites = { ...limites, [categoriaAtiva]: valorFloat };
-
     try {
-      // Envia todo o objeto de limites ou cria uma rota específica no backend
-      await orcamentosApi.atualizar(novosLimites); 
-      setLimites(novosLimites);
+      await orcamentosApi.upsert(categoriaAtiva, valorFloat);
+      setLimites({ ...limites, [categoriaAtiva]: valorFloat });
       setModalVisivel(false);
     } catch (error) {
       Alert.alert('Erro', 'Não foi possível guardar o limite no servidor.');
@@ -97,11 +93,10 @@ const carregarDados = useCallback(async () => {
 
   async function removerLimite() {
     setSalvando(true);
-    const novosLimites = { ...limites };
-    delete novosLimites[categoriaAtiva];
-
     try {
-      await orcamentosApi.atualizar(novosLimites);
+      await orcamentosApi.eliminar(categoriaAtiva);
+      const novosLimites = { ...limites };
+      delete novosLimites[categoriaAtiva];
       setLimites(novosLimites);
       setModalVisivel(false);
     } catch (error) {
