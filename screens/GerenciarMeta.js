@@ -1,7 +1,7 @@
-import { View, Text, StyleSheet, TextInput, ScrollView, Alert, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TextInput, ScrollView, Alert, Pressable, ActivityIndicator } from 'react-native';
 import { useState } from 'react';
 import { useTheme } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { metasApi } from '../services/api';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function GerenciarMeta({ navigation }) {
@@ -12,6 +12,7 @@ export default function GerenciarMeta({ navigation }) {
   const [valorAlvo, setValorAlvo] = useState('');
   const [depositoMensal, setDepositoMensal] = useState('');
   const [taxaJuros, setTaxaJuros] = useState('');
+  const [salvando, setSalvando] = useState(false); 
 
   // Lógica matemática idêntica à original
   function calcularPrevisao() {
@@ -38,15 +39,17 @@ export default function GerenciarMeta({ navigation }) {
 
   const projecao = calcularPrevisao();
 
-  // Guarda puxando os dados atuais direto do banco local antes de empilhar
-  async function guardarMeta() {
+// Guarda puxando os dados atuais direto do banco local antes de empilhar
+async function guardarMeta() {
     if (!nomeMeta.trim() || !projecao) {
       Alert.alert('Aviso', 'Preencha todos os campos corretamente para simular e guardar a meta.');
       return;
     }
 
+    setSalvando(true); // Bloqueia o botão
+
+   
     const novaMeta = {
-      id: Math.random().toString(),
       nome: nomeMeta,
       valorAlvo: parseFloat(valorAlvo.replace(',', '.')),
       depositoMensal: parseFloat(depositoMensal.replace(',', '.')),
@@ -55,17 +58,17 @@ export default function GerenciarMeta({ navigation }) {
     };
 
     try {
-      const dadosAtuais = await AsyncStorage.getItem('@metas_wisecash');
-      const listaAtual = dadosAtuais ? JSON.parse(dadosAtuais) : [];
-      const novaLista = [...listaAtual, novaMeta];
-      
-      await AsyncStorage.setItem('@metas_wisecash', JSON.stringify(novaLista));
+      // Manda os dados diretamente para o backend
+      await metasApi.criar(novaMeta);
       
       Alert.alert('Sucesso', 'A sua meta foi guardada com sucesso!', [
         { text: 'OK', onPress: () => navigation.goBack() }
       ]);
     } catch (error) {
-      Alert.alert('Erro', 'Não foi possível guardar a meta.');
+      console.error('Erro ao guardar meta:', error);
+      Alert.alert('Erro', 'Não foi possível ligar ao servidor para guardar a meta.');
+    } finally {
+      setSalvando(false); // Libera o botão
     }
   }
 
@@ -131,10 +134,15 @@ export default function GerenciarMeta({ navigation }) {
           <Text style={styles.textoResultadoData}>Previsão: {projecao.data}</Text>
           
           <Pressable 
-            style={({ pressed }) => [styles.botaoGuardar, pressed && { opacity: 0.8 }]} 
+            style={({ pressed }) => [styles.botaoGuardar, (pressed || salvando) && { opacity: 0.8 }]} 
             onPress={guardarMeta}
+            disabled={salvando} // Impede cliques múltiplos
           >
-            <Text style={styles.textoBotaoGuardar}>GUARDAR ESTA META</Text>
+            {salvando ? (
+              <ActivityIndicator color="#2E8B57" />
+            ) : (
+              <Text style={styles.textoBotaoGuardar}>GUARDAR ESTA META</Text>
+            )}
           </Pressable>
         </View>
       )}

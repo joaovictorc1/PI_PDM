@@ -1,7 +1,8 @@
-import { View, Text, StyleSheet, ScrollView, Image, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, Pressable, ActivityIndicator } from 'react-native';
 import { useState, useCallback } from 'react';
 import { useTheme, useFocusEffect, useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { transacoesApi, orcamentosApi } from '../services/api';
 import { Ionicons } from '@expo/vector-icons';
 
 import BarraProgresso from '../components/BarraProgresso';
@@ -20,28 +21,33 @@ export default function Dashboard() {
   // Novos estados para a listagem interna de orçamentos por categoria
   const [limitesCategorias, setLimitesCategorias] = useState({});
   const [gastosPorCategoria, setGastosPorCategoria] = useState({});
+  const [carregando, setCarregando] = useState(false);
+  const [erro, setErro] = useState(null);
 
   useFocusEffect(
     useCallback(() => {
       async function carregarDadosGlobais() {
+        setCarregando(true);
+        setErro(null);
+
         try {
-          // 1. Perfil
+          // 1. Perfil (Mantido no armazenamento local)
           const dadosPerfil = await AsyncStorage.getItem('@perfil_wisecash');
           if (dadosPerfil) {
             const perfilSalvo = JSON.parse(dadosPerfil);
             setPerfil({ nome: perfilSalvo.nome || '', foto: perfilSalvo.foto || null });
           }
 
-          // 2. Carregar limites das categorias
-          const limitesGuardados = await AsyncStorage.getItem('@orcamentos_wisecash');
-          const limitesParsed = limitesGuardados ? JSON.parse(limitesGuardados) : {};
-          setLimitesCategorias(limitesParsed);
+          // 2. Busca simultânea no servidor para orçamentos e transações
+          const [limitesGuardados, todasTransacoes] = await Promise.all([
+            orcamentosApi.listar(),
+            transacoesApi.listar()
+          ]);
 
-          // 3. Transações e Cálculos por Categoria
-          const dadosTransacoes = await AsyncStorage.getItem('@transacoes_wisecash');
-          if (dadosTransacoes) {
-            const todasTransacoes = JSON.parse(dadosTransacoes);
-            
+          setLimitesCategorias(limitesGuardados || {});
+
+          // 3. Cálculos e Processamento das Transações
+          if (todasTransacoes && todasTransacoes.length > 0) {
             const dataActual = new Date();
             const mesActual = dataActual.getMonth();
             const anoActual = dataActual.getFullYear();
@@ -84,11 +90,16 @@ export default function Dashboard() {
             alertas.sort((a, b) => new Date(a.data) - new Date(b.data));
             setContasAVencer(alertas);
           } else {
+            // Se a API não devolver transações, zera os indicadores
             setGastoMensal(0);
             setContasAVencer([]);
+            setGastosPorCategoria({});
           }
         } catch (error) {
           console.error('Erro ao carregar dados no dashboard', error);
+          setErro('Não foi possível ligar ao servidor para atualizar o painel.');
+        } finally {
+          setCarregando(false);
         }
       }
       carregarDadosGlobais();
@@ -97,6 +108,25 @@ export default function Dashboard() {
 
   const categoriasComLimite = Object.keys(limitesCategorias);
   const primeiroNome = perfil.nome ? perfil.nome.split(' ')[0] : 'Visitante';
+
+if (carregando) {
+    return (
+      <View style={[styles.container, styles.centrado]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (erro) {
+    return (
+      <View style={[styles.container, styles.centrado]}>
+        <Text style={styles.textoErro}>{erro}</Text>
+        <Pressable onPress={carregarDados} style={[styles.botaoRetry, { borderColor: colors.primary }]}>
+          <Text style={{ color: colors.primary }}>Tentar novamente</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

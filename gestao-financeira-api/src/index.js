@@ -2,7 +2,7 @@ require('dotenv').config();
 
 const express = require('express');
 const cors    = require('cors');
-const prisma  = require('./src/lib/prisma');
+const prisma  = require('./lib/prisma');
 
 const app  = express();
 const PORT = process.env.PORT || 3333;

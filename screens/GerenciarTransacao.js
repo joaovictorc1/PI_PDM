@@ -1,7 +1,7 @@
-import { View, Text, TextInput, StyleSheet, Button, Alert, Pressable, Platform, ScrollView, Switch, Image } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Button, Alert, Pressable, Platform, ScrollView, Switch, Image, ActivityIndicator} from 'react-native';
 import { useState, useLayoutEffect } from 'react';
 import { useTheme } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { transacoesApi } from '../services/api';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -26,6 +26,8 @@ export default function GerenciarTransacao({ navigation, route }) {
   const [numeroParcelas, setNumeroParcelas] = useState(isGrupoEdit ? transacaoRecebida.parcelas.length.toString() : '1');
   
   const [anexo, setAnexo] = useState(isEditando && transacaoRecebida.anexo ? transacaoRecebida.anexo : null);
+  
+  const [salvando, setSalvando] = useState(false);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -72,11 +74,13 @@ export default function GerenciarTransacao({ navigation, route }) {
     }
   }
 
-  async function guardarTransacao() {
+async function guardarTransacao() {
     if (!descricao.trim() || !valor.trim()) {
       Alert.alert('Aviso', 'Preencha a descrição e o valor.');
       return;
     }
+
+    setSalvando(true); // Bloqueia os botões
 
     const valorTotal = parseFloat(valor);
     let transacoesParaGuardar = [];
@@ -84,6 +88,7 @@ export default function GerenciarTransacao({ navigation, route }) {
     if (isParcelado && parseInt(numeroParcelas) > 1) {
       const qtdParcelas = parseInt(numeroParcelas);
       const valorPorParcela = valorTotal / qtdParcelas;
+      // Nota: o backend vai ignorar este Math.random() e gerar um ID real no banco
       const grupoId = isGrupoEdit ? transacaoRecebida.id : Math.random().toString();
 
       for (let i = 0; i < qtdParcelas; i++) {
@@ -91,7 +96,6 @@ export default function GerenciarTransacao({ navigation, route }) {
         dataDaParcela.setMonth(dataDaParcela.getMonth() + i);
 
         transacoesParaGuardar.push({
-          id: Math.random().toString(),
           grupoId: grupoId,
           descricaoBase: descricao,
           descricao: `${descricao} (${i + 1}/${qtdParcelas})`,
@@ -105,7 +109,6 @@ export default function GerenciarTransacao({ navigation, route }) {
       }
     } else {
       transacoesParaGuardar.push({
-        id: isEditando && !isGrupoEdit ? transacaoRecebida.id : Math.random().toString(),
         descricao: descricao,
         valor: valorTotal,
         data: dataSelecionada.toISOString(),
@@ -116,42 +119,41 @@ export default function GerenciarTransacao({ navigation, route }) {
     }
 
     try {
-      const dadosGuardados = await AsyncStorage.getItem('@transacoes_wisecash');
-      const transacoesAtuais = dadosGuardados ? JSON.parse(dadosGuardados) : [];
-      let novaLista = transacoesAtuais;
-
+      // 1. Se estiver a editar, o método mais seguro é apagar o registo antigo no servidor
       if (isEditando) {
         if (isGrupoEdit) {
-          novaLista = novaLista.filter(item => item.grupoId !== transacaoRecebida.id);
+          await transacoesApi.eliminarGrupo(transacaoRecebida.id);
         } else {
-          novaLista = novaLista.filter(item => item.id !== transacaoRecebida.id);
+          await transacoesApi.eliminar(transacaoRecebida.id);
         }
       }
       
-      novaLista = [...novaLista, ...transacoesParaGuardar];
-      await AsyncStorage.setItem('@transacoes_wisecash', JSON.stringify(novaLista));
+      // 2. Salva as novas transações no banco (Usa Promise.all para enviar todas de uma vez)
+      await Promise.all(transacoesParaGuardar.map(transacao => transacoesApi.criar(transacao)));
+      
       navigation.goBack();
     } catch (error) {
-      Alert.alert('Erro', 'Não foi possível guardar as alterações.');
+      console.error('Erro ao guardar transação:', error);
+      Alert.alert('Erro', 'Não foi possível guardar as alterações no servidor.');
+    } finally {
+      setSalvando(false);
     }
   }
 
-  async function apagarTransacao() {
+async function apagarTransacao() {
+    setSalvando(true);
     try {
-      const dadosGuardados = await AsyncStorage.getItem('@transacoes_wisecash');
-      const transacoesAtuais = dadosGuardados ? JSON.parse(dadosGuardados) : [];
-      
-      let novaLista = transacoesAtuais;
       if (isGrupoEdit) {
-        novaLista = novaLista.filter(item => item.grupoId !== transacaoRecebida.id);
+        await transacoesApi.eliminarGrupo(transacaoRecebida.id);
       } else {
-        novaLista = novaLista.filter(item => item.id !== transacaoRecebida.id);
+        await transacoesApi.eliminar(transacaoRecebida.id);
       }
-      
-      await AsyncStorage.setItem('@transacoes_wisecash', JSON.stringify(novaLista));
       navigation.goBack();
     } catch (error) {
-      Alert.alert('Erro', 'Não foi possível apagar o registo.');
+      console.error('Erro ao apagar:', error);
+      Alert.alert('Erro', 'Não foi possível apagar o registo no servidor.');
+    } finally {
+      setSalvando(false);
     }
   }
 
@@ -235,14 +237,31 @@ export default function GerenciarTransacao({ navigation, route }) {
         )}
       </View>
 
-      {/* O botão Guardar agora está numa área com espaçamento protegido */}
+{/* Botão de Guardar customizado para suportar o estado de loading */}
       <View style={styles.botoesContainer}>
-        <Button title={isEditando ? "Atualizar" : "Guardar"} color={colors.primary} onPress={guardarTransacao} />
+        <Pressable 
+          style={[{ backgroundColor: colors.primary, paddingVertical: 14, borderRadius: 8, alignItems: 'center' }, salvando && { opacity: 0.6 }]}
+          onPress={guardarTransacao}
+          disabled={salvando}
+        >
+          {salvando ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' }}>
+              {isEditando ? "Atualizar" : "Guardar"}
+            </Text>
+          )}
+        </Pressable>
       </View>
 
+      {/* Lixeira com proteção contra múltiplos cliques */}
       {isEditando && (
         <View style={styles.lixeiraContainer}>
-          <Ionicons name="trash" size={36} color="#FF4C4C" onPress={apagarTransacao} />
+          {salvando ? (
+            <ActivityIndicator size="large" color="#FF4C4C" />
+          ) : (
+            <Ionicons name="trash" size={36} color="#FF4C4C" onPress={apagarTransacao} />
+          )}
         </View>
       )}
     </ScrollView>

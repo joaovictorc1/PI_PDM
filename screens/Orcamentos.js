@@ -1,7 +1,7 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, Modal, ActivityIndicator } from 'react-native';
 import { useState, useCallback } from 'react';
 import { useTheme, useFocusEffect } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { orcamentosApi, transacoesApi } from '../services/api';
 import { Ionicons } from '@expo/vector-icons';
 
 const CATEGORIAS_DISPONIVEIS = ['Alimentação', 'Transporte', 'Lazer', 'Saúde', 'Educação', 'Outros'];
@@ -17,48 +17,56 @@ export default function Orcamentos() {
   const [modalVisivel, setModalVisivel] = useState(false);
   const [categoriaAtiva, setCategoriaAtiva] = useState('');
   const [valorInput, setValorInput] = useState('');
+  const [carregando, setCarregando] = useState(false);
+  const [erro, setErro] = useState(null);
+  const [salvando, setSalvando] = useState(false); 
 
   // Carrega os gastos do mês e os limites guardados
   useFocusEffect(
     useCallback(() => {
       async function carregarDados() {
+        setCarregando(true);
+        setErro(null);
+
         try {
-          // 1. Carregar Limites
-          const limitesGuardados = await AsyncStorage.getItem('@orcamentos_wisecash');
+          // Busca os limites e as transações do servidor ao mesmo tempo
+          const [limitesGuardados, todasTransacoes] = await Promise.all([
+            orcamentosApi.listar(),
+            transacoesApi.listar()
+          ]);
+
+          // 1. Atualiza os limites (O backend deve devolver um objeto ex: { Lazer: 500 })
           if (limitesGuardados) {
-            setLimites(JSON.parse(limitesGuardados));
+            setLimites(limitesGuardados);
           }
 
-          // 2. Carregar Despesas e calcular apenas as do mês atual
-          const transacoesGuardadas = await AsyncStorage.getItem('@transacoes_wisecash');
-          if (transacoesGuardadas) {
-            const todasTransacoes = JSON.parse(transacoesGuardadas);
+          // 2. Calcula as despesas do mês atual
+          const dataAtual = new Date();
+          const mesAtual = dataAtual.getMonth();
+          const anoAtual = dataAtual.getFullYear();
+
+          const calculoGastos = {};
+          CATEGORIAS_DISPONIVEIS.forEach(cat => calculoGastos[cat] = 0);
+
+          todasTransacoes.forEach(transacao => {
+            const dataTransacao = new Date(transacao.data);
             
-            const dataAtual = new Date();
-            const mesAtual = dataAtual.getMonth();
-            const anoAtual = dataAtual.getFullYear();
+            if (dataTransacao.getMonth() === mesAtual && 
+                dataTransacao.getFullYear() === anoAtual && 
+                CATEGORIAS_DISPONIVEIS.includes(transacao.categoria)) {
+              calculoGastos[transacao.categoria] += transacao.valor;
+            }
+          });
 
-            const calculoGastos = {};
-            CATEGORIAS_DISPONIVEIS.forEach(cat => calculoGastos[cat] = 0); // Inicializa a zero
+          setGastosAtuais(calculoGastos);
 
-            todasTransacoes.forEach(transacao => {
-              const dataTransacao = new Date(transacao.data);
-              
-              // Se a despesa for deste mês e for de uma categoria válida
-              if (dataTransacao.getMonth() === mesAtual && 
-                  dataTransacao.getFullYear() === anoAtual && 
-                  CATEGORIAS_DISPONIVEIS.includes(transacao.categoria)) {
-                calculoGastos[transacao.categoria] += transacao.valor;
-              }
-            });
-
-            setGastosAtuais(calculoGastos);
-          }
         } catch (error) {
-          console.error('Erro ao carregar orçamentos', error);
+          console.error('Erro ao carregar orçamentos:', error);
+          setErro('Não foi possível ligar ao servidor.');
+        } finally {
+          setCarregando(false);
         }
       }
-      carregarDados();
     }, [])
   );
 
@@ -76,28 +84,54 @@ export default function Orcamentos() {
       return;
     }
 
+    setSalvando(true);
     const novosLimites = { ...limites, [categoriaAtiva]: valorFloat };
 
     try {
-      await AsyncStorage.setItem('@orcamentos_wisecash', JSON.stringify(novosLimites));
+      // Envia todo o objeto de limites ou cria uma rota específica no backend
+      await orcamentosApi.atualizar(novosLimites); 
       setLimites(novosLimites);
       setModalVisivel(false);
     } catch (error) {
-      Alert.alert('Erro', 'Não foi possível guardar o limite.');
+      Alert.alert('Erro', 'Não foi possível guardar o limite no servidor.');
+    } finally {
+      setSalvando(false);
     }
   }
 
   async function removerLimite() {
+    setSalvando(true);
     const novosLimites = { ...limites };
     delete novosLimites[categoriaAtiva];
 
     try {
-      await AsyncStorage.setItem('@orcamentos_wisecash', JSON.stringify(novosLimites));
+      await orcamentosApi.atualizar(novosLimites);
       setLimites(novosLimites);
       setModalVisivel(false);
     } catch (error) {
-      Alert.alert('Erro', 'Não foi possível remover o limite.');
+      Alert.alert('Erro', 'Não foi possível remover o limite no servidor.');
+    } finally {
+      setSalvando(false);
     }
+  }
+
+    if (carregando) {
+    return (
+      <View style={[styles.container, styles.centrado]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (erro) {
+    return (
+      <View style={[styles.container, styles.centrado]}>
+        <Text style={styles.textoErro}>{erro}</Text>
+        <Pressable onPress={carregarDados} style={[styles.botaoRetry, { borderColor: colors.primary }]}>
+          <Text style={{ color: colors.primary }}>Tentar novamente</Text>
+        </Pressable>
+      </View>
+    );
   }
 
   return (
@@ -183,17 +217,25 @@ export default function Orcamentos() {
 
             <View style={styles.modalBotoes}>
               {limites[categoriaAtiva] && (
-                <Pressable style={[styles.botaoModal, { backgroundColor: '#FF4C4C' }]} onPress={removerLimite}>
+                <Pressable 
+                  style={[styles.botaoModal, { backgroundColor: '#FF4C4C', opacity: salvando ? 0.6 : 1 }]} 
+                  onPress={removerLimite}
+                  disabled={salvando}
+                >
                   <Text style={styles.textoBotao}>Remover</Text>
                 </Pressable>
               )}
               
-              <Pressable style={[styles.botaoModal, { backgroundColor: 'gray' }]} onPress={() => setModalVisivel(false)}>
+              <Pressable style={[styles.botaoModal, { backgroundColor: 'gray' }]} onPress={() => setModalVisivel(false)} disabled={salvando}>
                 <Text style={styles.textoBotao}>Cancelar</Text>
               </Pressable>
               
-              <Pressable style={[styles.botaoModal, { backgroundColor: colors.primary }]} onPress={guardarLimite}>
-                <Text style={styles.textoBotao}>Guardar</Text>
+              <Pressable 
+                style={[styles.botaoModal, { backgroundColor: colors.primary, opacity: salvando ? 0.6 : 1 }]} 
+                onPress={guardarLimite}
+                disabled={salvando}
+              >
+                {salvando ? <ActivityIndicator color="#FFF" size="small"/> : <Text style={styles.textoBotao}>Guardar</Text>}
               </Pressable>
             </View>
           </View>

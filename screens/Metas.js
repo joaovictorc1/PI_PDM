@@ -1,37 +1,66 @@
-import { View, Text, StyleSheet, ScrollView, Alert, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, Pressable, ActivityIndicator } from 'react-native';
 import { useState, useCallback } from 'react';
 import { useTheme, useFocusEffect } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { metasApi } from '../services/api';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function Metas() {
   const { colors } = useTheme();
   const [listaMetas, setListaMetas] = useState([]);
+  const [carregando, setCarregando] = useState(false); 
+  const [erro, setErro] = useState(null);              
 
   useFocusEffect(
     useCallback(() => {
       async function carregarMetas() {
+        setCarregando(true);
+        setErro(null);
+
         try {
-          const dados = await AsyncStorage.getItem('@metas_wisecash');
-          if (dados) setListaMetas(JSON.parse(dados));
+          const dados = await metasApi.listar();
+          setListaMetas(dados);
         } catch (error) {
           console.error('Erro ao carregar metas', error);
+          setErro('Não foi possível ligar ao servidor.');
+        } finally {
+          setCarregando(false);
         }
       }
       carregarMetas();
     }, [])
   );
 
-  async function apagarMeta(id) {
+async function apagarMeta(id) {
     try {
+      await metasApi.eliminar(id); 
+      
       const novaLista = listaMetas.filter(meta => meta.id !== id);
-      await AsyncStorage.setItem('@metas_wisecash', JSON.stringify(novaLista));
       setListaMetas(novaLista);
     } catch (error) {
-      Alert.alert('Erro', 'Não foi possível apagar a meta.');
+      console.error('Erro ao apagar meta:', error);
+      Alert.alert('Erro', 'Não foi possível apagar a meta no servidor.');
     }
   }
 
+  if (carregando) {
+    return (
+      <View style={[styles.container, styles.centrado]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (erro) {
+    return (
+      <View style={[styles.container, styles.centrado]}>
+        <Text style={styles.textoErro}>{erro}</Text>
+        <Pressable onPress={carregarDados} style={[styles.botaoRetry, { borderColor: colors.primary }]}>
+          <Text style={{ color: colors.primary }}>Tentar novamente</Text>
+        </Pressable>
+      </View>
+    );
+  }
+  
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <Text style={[styles.titulo, { color: colors.text }]}>As Minhas Metas</Text>
